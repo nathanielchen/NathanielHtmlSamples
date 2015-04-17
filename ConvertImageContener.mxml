@@ -1,0 +1,2485 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009"
+		  xmlns:s="library://ns.adobe.com/flex/spark"
+		  xmlns:mx="library://ns.adobe.com/flex/mx"
+		  width="100%" height="100%">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.filters.BitmapFilter;
+			
+			import mx.controls.SWFLoader;
+			import mx.events.FlexEvent;
+			import mx.graphics.IFill;
+			import mx.graphics.SolidColor;
+			import mx.graphics.codec.JPEGEncoder;
+			import mx.graphics.codec.PNGEncoder;
+			
+			import spark.components.Group;
+			import spark.components.Image;
+			import spark.primitives.Graphic;
+			import spark.primitives.Rect;
+			
+			import entities.CssAttributes;
+			
+			import org.bytearray.gif.encoder.GIFEncoder;
+			
+			
+			//private var tempMovie:MovieClip;
+			private var buttonStateArray:Array = new Array("_up","_over","_down");
+			private var currentFrame:int;
+			private var tempImageSizeArray:Array;
+			
+			
+			
+			public function convertFlash2Image(source:Object, imageSizeArray:Array, realImageSize:Boolean, buttonState:String = ""):void
+			{
+				//Delete all pre added elements
+				if(this.numChildren>0){
+					removeAllElements();
+				}
+				
+				if(!imageSizeArray){
+					AppPlusCache.showPopupMessage("Error", "A non-Error", "Image size has not been definded.", root);
+				}
+					
+				//AppPlusCache.Instance.currentWorkingObject.content
+				//("user "+AppPlusCache.Instance.currentWorkingObject.content);
+				
+				for(var s:int = 0; s<imageSizeArray.length; s++){
+					//parent function pass the source - when source is not Null
+					if(source){
+						if(realImageSize){	
+							//Movie Real size
+							setRealDimension_SwfSource(source, imageSizeArray[s], AppPlusCache.Instance.currentDisplayObjectCurrentFrame, imageSizeArray[s].name, buttonState);
+						}else{
+							//Movie Scale size
+							setScaleDimension_SwfSource(source, imageSizeArray[s], AppPlusCache.Instance.currentDisplayObjectCurrentFrame, imageSizeArray[s].name);
+						}
+					}else{
+						//pre create new swfloaders for new png images
+						//Loop all selected object
+						for each(var selection:Object in AppPlusCache.Instance.currentSelectedObjects)
+						{
+							source = selection.libraryClass;
+							//When the display object is Button
+							if(selection.libraryType == RemoteSingleton.objectSelector._SimpleButton){
+								if(realImageSize){
+									//Button Real size
+									setButtonRealDimension_SwfSource(source, imageSizeArray, selection.libraryName);
+								}else{
+									//Button Scale size
+									setButtonScaleDimension_SwfSource(source, imageSizeArray, selection.libraryName);
+								}
+							}else{
+								
+								if(realImageSize){	
+									//Movie Real size
+									setRealDimension_SwfSource(source, imageSizeArray[s], AppPlusCache.Instance.currentDisplayObjectCurrentFrame, selection.libraryName, buttonState);
+								}else{
+									//Movie Scale size
+									setScaleDimension_SwfSource(source, imageSizeArray[s], AppPlusCache.Instance.currentDisplayObjectCurrentFrame, selection.libraryName);
+								}
+							}
+						}
+					}
+					
+				}
+			}
+			
+			
+			private function createButton2ImageFiles(selection:Object, imageType:String, imageScaleArray:Array, imageSizeArray:Array, saveFileDirectory:String, currentLinkageName:String, transparency:Boolean, backgroundColor:uint, quality:int, buttonState:String, realImageSize:Boolean, scaleToFitType:String, exportSequence:Boolean):void
+			{
+				
+				var tempSwfClass:SWFLoader
+				var objectBoundingBox:Rectangle;
+				var matrix:Matrix;
+				
+				var tempGap_width:Number;	
+				var tempGap_height:Number;	
+				var tempScaleX:Number =1;
+				var tempScaleY:Number =1;
+				
+				//Simple Button to image file
+				if(buttonState=="Icon")
+				{
+					buttonStateArray = new Array("icon");
+				}
+				var tempStateSprite:Sprite;
+				
+				for(var s:int = 0; s<imageSizeArray.length; s++)
+				{
+					for(var i:int = 0; i<imageScaleArray.length; i++)
+					{
+						for(var j:int=0; j<buttonStateArray.length;j++)
+						{
+							switch(buttonStateArray[j])
+							{
+								case "_up":
+									tempSwfClass = this.getChildByName("upState"+selection.libraryName) as SWFLoader; //upStateSwfClass
+									tempStateSprite = tempSwfClass as Sprite;
+									//tempStateSprite = simpleButton.upState as Sprite;
+									break;
+								case "_over":
+									tempSwfClass = this.getChildByName("overState"+selection.libraryName) as SWFLoader;//overStateSwfClass
+									tempStateSprite = tempSwfClass as Sprite;
+									//tempStateSprite =simpleButton.overState as Sprite;
+									break;
+								case "_down":
+									tempSwfClass = this.getChildByName("downState"+selection.libraryName) as SWFLoader;//downStateSwfClass
+									tempStateSprite = tempSwfClass as Sprite;
+									//tempStateSprite =simpleButton.downState as Sprite;
+									break; 
+								default:
+									//Icon
+									//When user selected button and export with icon panel (Not button state definded on the passing)
+									trace("@"+selection.libraryName+imageSizeArray[s].name);
+									tempSwfClass = this.getChildByName(selection.libraryName+imageSizeArray[s].name) as SWFLoader;//"swfClass"
+									tempStateSprite = tempSwfClass as Sprite;
+									break;
+							}
+							
+							objectBoundingBox = RemoteSingleton.boundingBox.getBoundingBox(null,tempStateSprite,1);
+							//Create Matrix (same as Movie matrix) 
+							matrix=tempStateSprite.transform.concatenatedMatrix;
+							if(realImageSize)
+							{
+								//**************************************************
+								//**************************************************
+								//defind the translate and scale	
+								Trace.log("tempGap_width:"+tempGap_width+", tempGap_height:"+tempGap_height);
+								//tempSwfClass.getChildAt(0);
+								
+								tempGap_width = ( tempStateSprite.width-tempSwfClass.width );	
+								tempGap_height = (tempStateSprite.height-tempSwfClass.height );	
+								tempScaleX =1;
+								tempScaleY =1;
+								
+								switch(scaleToFitType)
+								{
+									case "ScaleToFill":
+										//Scale to fit the width and height
+										//Find which scale -> defind the value -> apply the scale
+										if(tempGap_width != 0)
+										{
+											tempScaleX = (tempStateSprite.width/tempSwfClass.width );
+										}
+										if(tempGap_height != 0)
+										{
+											tempScaleY = (tempStateSprite.height/tempSwfClass.height );
+										}
+										matrix.scale(tempScaleX, tempScaleY);
+										
+										//translate to fit in the image
+										matrix.translate(-(tempStateSprite.transform.pixelBounds.left + objectBoundingBox.left)*tempScaleX, 
+											-(tempStateSprite.transform.pixelBounds.top + objectBoundingBox.top)*tempScaleY);
+										break;
+									case "FitWidth":
+										if(tempGap_width != 0)
+										{
+											tempScaleX = (tempStateSprite.width/tempSwfClass.width );
+										}
+										matrix.scale(tempScaleX, tempScaleY);
+										//translate to fit in the image
+										matrix.translate(-(tempStateSprite.transform.pixelBounds.left + objectBoundingBox.left)*tempScaleX, 
+											-(tempStateSprite.transform.pixelBounds.top + objectBoundingBox.top)*tempScaleY);
+										break;
+									case "FitHeight":
+										if(tempGap_height != 0)
+										{
+											tempScaleY = (tempStateSprite.height/tempSwfClass.height );
+										}
+										matrix.scale(tempScaleX, tempScaleY);
+										//translate to fit in the image
+										matrix.translate(-(tempStateSprite.transform.pixelBounds.left + objectBoundingBox.left)*tempScaleX, 
+											-(tempStateSprite.transform.pixelBounds.top + objectBoundingBox.top)*tempScaleY);
+										break;
+									case "ScaleToFit":
+									default:
+										//NaturalSize
+										matrix.translate(-(tempStateSprite.transform.pixelBounds.left + objectBoundingBox.left)+(tempGap_width/2), 
+											-(tempStateSprite.transform.pixelBounds.top + objectBoundingBox.top)+(tempGap_height/2));
+										break;
+								}
+								
+								//**************************************************
+								//**************************************************
+								
+								//When user export image with width and height values
+								/*matrix.translate(	-(tempStateSprite.transform.pixelBounds.left + objectBoundingBox.left),
+								-(tempStateSprite.transform.pixelBounds.top + objectBoundingBox.top));*/
+							}
+							else
+							{
+								//User export image with scale value
+								matrix.scale(imageScaleArray[i].scale, imageScaleArray[i].scale);
+								matrix.translate(	-(tempStateSprite.transform.pixelBounds.left + objectBoundingBox.left)*imageScaleArray[i].scale,
+									-(tempStateSprite.transform.pixelBounds.top + objectBoundingBox.top)*imageScaleArray[i].scale);
+							}
+							//if icon is save
+							if(buttonState=="Icon")
+							{
+								//save Button Up/Over/Down state
+								saveImageFIles(imageType, saveFileDirectory, selection.libraryName, transparency, backgroundColor, buttonStateArray[j], objectBoundingBox, tempStateSprite, matrix, quality, imageSizeArray[s], imageScaleArray[i], realImageSize, "");
+							}else
+							{
+								//save Button Up/Over/Down state
+								saveImageFIles(imageType, saveFileDirectory, selection.libraryName, transparency, backgroundColor, buttonStateArray[j], objectBoundingBox, tempStateSprite, matrix, quality, imageSizeArray[s], imageScaleArray[i], realImageSize, currentLinkageName);
+								
+							}
+						}
+					}
+				}
+				
+				objectBoundingBox = null;
+				tempSwfClass = null;
+			}
+			
+			private function createMovieClip2ImageFiles(selection:Object, imageType:String, imageScaleArray:Array, imageSizeArray:Array, saveFileDirectory:String, currentLinkageName:String, transparency:Boolean, backgroundColor:uint, quality:int, buttonState:String, realImageSize:Boolean, scaleToFitType:String, exportSequence:Boolean):void
+			{
+				
+				var tempSwfClass:SWFLoader
+				var objectBoundingBox:Rectangle;
+				var matrix:Matrix;
+				
+				var tempGap_width:Number;	
+				var tempGap_height:Number;	
+				var tempScaleX:Number =1;
+				var tempScaleY:Number =1;
+				
+				//Movie Clip to image file
+				//todo loop exportSequence 
+				var totalExportSequence:int 
+				var tempMovie:MovieClip
+				
+				/*if(imageSizeArray.length>1)
+				{
+					Trace.log("\n\n\n\n");
+					Trace.log("imageSizeArray:"+imageSizeArray.toString());
+					Trace.log("\n\n\n\n");
+				}*/
+				
+				for(var s:int = 0; s<imageSizeArray.length; s++)
+				{
+					for(var n:int = 0; n<imageScaleArray.length; n++)
+					{	
+						//Get tempSwfClass -swfloader
+						if(buttonState=="Icon"){
+							//export Icon image files
+							//Library item Button item
+							//this.getChildAt(0)
+							/*if(selection is SWFLoader)
+							{
+								//SWF file to Image
+								tempSwfClass = selection as SWFLoader;
+							}else
+							{*/
+								//Library item / movieclip item
+								tempSwfClass = this.getChildByName(imageSizeArray[s].name)as SWFLoader;//"swfClass"
+							//}
+						}else{
+							//export imge files but not for icon.
+							if(selection is SWFLoader)
+							{
+								//SWF file to Image
+								tempSwfClass = selection as SWFLoader;
+							}else{
+								//Library item / movieclip item
+								tempSwfClass = this.getChildByName(selection.libraryName) as SWFLoader;//"swfClass"
+								if(!tempSwfClass)
+								{
+									tempSwfClass = this.getChildByName(imageSizeArray[s].name)as SWFLoader;//"swfClass"
+								}
+							}
+						}
+						
+						tempMovie = tempSwfClass.content as MovieClip;
+						//Check is exportSequence
+						if(exportSequence)
+						{
+							currentFrame = 1;
+							totalExportSequence = tempMovie.totalFrames;
+						}
+						else
+						{
+							totalExportSequence = currentFrame;
+						}
+						
+						//loop exportSequence
+						for(var f:int = currentFrame; f<=totalExportSequence; f++)
+						{
+							Trace.log(currentLinkageName+AppPlusCache.Instance.sequenceImageNumber(f,4)+".png");
+							//defind the linkageName
+							//go to and stop the frame sequence
+							tempMovie.gotoAndStop(f);
+							
+							
+							//save Movie 
+							//var tempSprite:Sprite = tempSwfClass.content as Sprite;
+							objectBoundingBox = RemoteSingleton.boundingBox.getBoundingBox(null,tempMovie,1);
+							
+							//Create Matrix (same as Button matrix) 
+							matrix=tempMovie.transform.concatenatedMatrix;
+							if(realImageSize)
+							{
+								//When user definad the size by width and height
+								//translate to center
+								//**************************************************
+								//**************************************************
+								//defind the translate and scale	
+								tempGap_width = (tempSwfClass.width - tempMovie.width);	
+								tempGap_height = (tempSwfClass.height - tempMovie.height);	
+								tempScaleX =1;
+								tempScaleY =1;
+								
+								Trace.log("tempGap_width:"+tempGap_width+", tempGap_height:"+tempGap_height);
+								
+								switch(scaleToFitType)
+								{
+									case "ScaleToFill":
+										//Scale to fit the width and height
+										//Find which scale -> defind the value -> apply the scale
+										if(tempGap_width != 0)
+										{
+											tempScaleX = (tempSwfClass.width/tempMovie.width );
+										}
+										if(tempGap_height != 0)
+										{
+											tempScaleY = (tempSwfClass.height/tempMovie.height );
+										}
+										matrix.scale(tempScaleX, tempScaleY);
+										
+										//translate to fit in the image
+										matrix.translate(-(tempMovie.transform.pixelBounds.left + objectBoundingBox.left)*tempScaleX, 
+											-(tempMovie.transform.pixelBounds.top + objectBoundingBox.top)*tempScaleY);
+										break;
+									case "FitWidth":
+										if(tempGap_width != 0)
+										{
+											tempScaleX = (tempSwfClass.width/tempMovie.width );
+										}
+										matrix.scale(tempScaleX, tempScaleY);
+										//translate to fit in the image
+										matrix.translate(-(tempMovie.transform.pixelBounds.left + objectBoundingBox.left)*tempScaleX, 
+											-(tempMovie.transform.pixelBounds.top + objectBoundingBox.top)*tempScaleY);
+										break;
+									case "FitHeight":
+										if(tempGap_height != 0)
+										{
+											tempScaleY = (tempSwfClass.height/tempMovie.height );
+										}
+										matrix.scale(tempScaleX, tempScaleY);
+										//translate to fit in the image
+										matrix.translate(-(tempMovie.transform.pixelBounds.left + objectBoundingBox.left)*tempScaleX, 
+											-(tempMovie.transform.pixelBounds.top + objectBoundingBox.top)*tempScaleY);
+										break;
+									case "ScaleToFit":
+									default:
+										//NaturalSize
+										matrix.translate(-(tempMovie.transform.pixelBounds.left + objectBoundingBox.left)+(tempGap_width/2), 
+											-(tempMovie.transform.pixelBounds.top + objectBoundingBox.top)+(tempGap_height/2));
+										break;
+								}
+								
+								//**************************************************
+								//**************************************************
+							}
+							else
+							{
+								//when user defaind the size be scale
+								matrix.scale(imageScaleArray[n].scale, imageScaleArray[n].scale);
+								matrix.translate(	-(tempMovie.transform.pixelBounds.left + objectBoundingBox.left)*imageScaleArray[n].scale,
+									-(tempMovie.transform.pixelBounds.top + objectBoundingBox.top)*imageScaleArray[n].scale);
+							}
+							
+							var imageName:String;
+							if(exportSequence)
+							{
+								imageName = selection.libraryName+AppPlusCache.Instance.sequenceImageNumber(f,4);
+							}
+							else
+							{
+								if(selection is SWFLoader)
+								{
+									imageName = currentLinkageName.replace(".swf","")
+								}
+								else
+								{
+									imageName = selection.libraryName;
+								}
+							}
+							if(buttonState=="Icon")
+							{
+								//save icons
+								saveImageFIles(imageType, saveFileDirectory, imageName, transparency, backgroundColor, "", objectBoundingBox, tempMovie as Sprite, matrix, quality, imageSizeArray[s], imageScaleArray[n], realImageSize, "");	
+							}else
+							{
+								saveImageFIles(imageType, saveFileDirectory, imageName, transparency, backgroundColor, "", objectBoundingBox, tempMovie as Sprite, matrix, quality, imageSizeArray[s], imageScaleArray[n], realImageSize, currentLinkageName);	
+							}
+						}
+					}
+				}
+				objectBoundingBox = null;
+				tempSwfClass = null;
+			}
+			
+			//Create Image
+			public function createImageFiles(imageType:String, imageScaleArray:Array, imageSizeArray:Array, saveFileDirectory:String, currentLinkageName:String, transparency:Boolean, backgroundColor:uint, quality:int, buttonState:String, realImageSize:Boolean, scaleToFitType:String, exportSequence:Boolean, selectedObjects:Vector.<Object> = null, selectedSwfLoader:SWFLoader=null):void
+			{	
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " + " source:" +currentLinkageName);
+				if(selectedObjects)
+				{
+					AppPlusCache.Instance.currentSelectedObjects = selectedObjects;
+				}
+				
+				AppPlusCache.showProcessingMessage("Please Wait", "Converting Flash to Image Files", root);
+				var source:Object;
+				
+				if(AppPlusCache.Instance.currentSelectedObjects)
+				{
+					//Library Item
+					//Trace.log(AppPlusCache.Instance.currentSelectedObjects.length);
+					for each(var selection:Object in AppPlusCache.Instance.currentSelectedObjects)
+					{
+						source = selection.libraryClass;
+						//pre create new swfloaders for new png images
+						if(selection.libraryType==RemoteSingleton.objectSelector._SimpleButton)
+						{
+							createButton2ImageFiles(selection, imageType, imageScaleArray, imageSizeArray, saveFileDirectory, currentLinkageName, transparency, backgroundColor, quality, buttonState, realImageSize, scaleToFitType, exportSequence);
+						}
+						else if(selection.libraryType==RemoteSingleton.objectSelector._MovieClip)
+						{
+							createMovieClip2ImageFiles(selection, imageType,imageScaleArray, imageSizeArray, saveFileDirectory, currentLinkageName, transparency, backgroundColor, quality, buttonState, realImageSize, scaleToFitType, exportSequence);
+						}
+					}
+				}else if(selectedSwfLoader){
+					createMovieClip2ImageFiles(selectedSwfLoader, imageType, imageScaleArray, imageSizeArray, saveFileDirectory, currentLinkageName, transparency, backgroundColor, quality, buttonState, realImageSize, scaleToFitType, exportSequence);
+				}else{
+					//if swf file is no empty
+					if(AppPlusCache.Instance.currentWorkingObject)
+					{
+						//SWF file to Image
+						createMovieClip2ImageFiles(AppPlusCache.Instance.currentWorkingObject, imageType, imageScaleArray, imageSizeArray, saveFileDirectory, currentLinkageName, transparency, backgroundColor, quality, buttonState, realImageSize, scaleToFitType, exportSequence);
+					}
+				}
+				if(this.numChildren>0)
+				{
+					removeAllElements();
+				}
+				
+				AppPlusCache.hideProcessingMessage();
+				//Clrean
+				//objectBoundingBox = null;
+				//tempSwfClass = null;
+				//matrix1 = null;
+				//tempMovie = null;
+			}
+			
+			
+			protected function completeLoadedMovie(event:Event):void{
+				stopThisMovieClip(event.target.content as MovieClip);
+				if(event.target.content != null){
+					removeSwfLoaderEvents(event);
+				}
+			}
+			protected function updateCompleteHandler(event:FlexEvent):void{
+				stopThisMovieClip(event.target.content as MovieClip);
+				if(event.target.content != null){
+					removeSwfLoaderFlexEvents(event);
+				}
+			}
+			
+			private function stopThisMovieClip(tempMovie:MovieClip):void{
+				if(tempMovie != null){
+					tempMovie.gotoAndStop(currentFrame);
+				}
+			}
+			
+			//Button Scale Size
+			//Movie Scale Size
+			private function setButtonScaleDimension_SwfSource(source:Object, imageSizeArray:Array, libraryName:String):void
+			{
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " +currentFrame);
+				
+				tempImageSizeArray = imageSizeArray;
+				//Loop all size of image here
+				var swfloader:SWFLoader = new SWFLoader();
+				//swfloader.loaderInfo.uncaughtErrorEvents.addEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR, uncaughtErrorHandler);
+				swfloader.addEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR,errorHandler);
+				swfloader.addEventListener(FlexEvent.INVALID, INVALIDErrorHandler);
+				swfloader.addEventListener(Event.COMPLETE, completeLoadedButton);	
+				swfloader.addEventListener(FlexEvent.UPDATE_COMPLETE, completeLoadedButton);
+				
+				swfloader.name= libraryName; // "swfClass";
+				swfloader.source = source;
+				
+				/*tempMovie = swfloader.content as MovieClip;
+				if(tempMovie)
+				{
+				tempMovie.gotoAndStop(currentFrame);
+				}*/
+				addElement(swfloader);
+			}
+			
+			private function completeLoadedButton(event:Event):void
+			{
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - ");
+				removeSwfLoaderEvents(event);
+				
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " );
+				//buttonStateArray = new Array("_up","_over","_down");
+				
+				var simpleButton:SimpleButton = event.target.content as SimpleButton;
+				simpleButton.width = tempImageSizeArray[0].width;
+				simpleButton.height = tempImageSizeArray[0].height;
+				//create all the button stage
+				//Up Stage
+				var upStateSwfClass:SWFLoader = new SWFLoader();
+				upStateSwfClass.name="upState"+event.target.name; //upStateSwfClass
+				upStateSwfClass.addChild(simpleButton.upState);
+				upStateSwfClass.width = tempImageSizeArray[0].width;
+				upStateSwfClass.height = tempImageSizeArray[0].height;
+				addElement(upStateSwfClass);
+				//Over Stage
+				var overStateSwfClass:SWFLoader = new SWFLoader();
+				overStateSwfClass.name="overState"+event.target.name;//overStateSwfClass
+				overStateSwfClass.addChild(simpleButton.overState);
+				overStateSwfClass.width = tempImageSizeArray[0].width;
+				overStateSwfClass.height = tempImageSizeArray[0].height;
+				addElement(overStateSwfClass);
+				//Down Stage
+				var downStateSwfClass:SWFLoader = new SWFLoader();
+				downStateSwfClass.name="downState"+event.target.name;//downStateSwfClass
+				downStateSwfClass.addChild(simpleButton.downState);
+				downStateSwfClass.width = tempImageSizeArray[0].width;
+				downStateSwfClass.height = tempImageSizeArray[0].height;
+				addElement(downStateSwfClass);
+			}
+			
+			
+			
+			//Button Real Size
+			private function setButtonRealDimension_SwfSource(source:Object, imageSizeArray:Array, libraryName:String):void
+			{
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " );
+				//buttonStateArray = new Array("");
+				
+				for(var i:int = 0; i<imageSizeArray.length; i++)
+				{
+					
+					tempImageSizeArray = imageSizeArray;
+					//Loop all size of image here
+					var swfloader:SWFLoader = new SWFLoader();
+					//Check if that is come from Create Icon
+					if(imageSizeArray.length == 3 )
+					{
+						swfloader.addEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR,errorHandler);
+						swfloader.addEventListener(FlexEvent.INVALID, INVALIDErrorHandler);
+						swfloader.addEventListener(Event.COMPLETE, completeLoadedButton);	
+						swfloader.addEventListener(FlexEvent.UPDATE_COMPLETE, completeLoadedButton);
+					}
+					swfloader.name= libraryName+imageSizeArray[i].name;//"swfClass"+
+					swfloader.source = source;
+					swfloader.width = imageSizeArray[i].width;
+					swfloader.height = imageSizeArray[i].height;
+					
+					addElement(swfloader);
+				}
+			}
+			
+			//Movie Real Size
+			private function setRealDimension_SwfSource(source:Object, imageSizeArrayItem:Object, _currentFrame:int, libraryName:String, buttonState:String ):void
+			{
+				currentFrame = _currentFrame;
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " +currentFrame);
+				
+				//Loop all size of image here
+				//for(var i:int = 0; i<imageSizeArray.length; i++)
+				//{
+					var swfloader:SWFLoader = new SWFLoader();
+					//swfloader.loaderInfo.uncaughtErrorEvents.addEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR, uncaughtErrorHandler);
+					swfloader.addEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR,errorHandler);
+					swfloader.addEventListener(FlexEvent.INVALID, INVALIDErrorHandler);
+					swfloader.addEventListener(Event.COMPLETE, completeLoadedMovie);
+					swfloader.addEventListener(FlexEvent.UPDATE_COMPLETE, updateCompleteHandler);
+					
+					trace("$"+libraryName);
+					//if(buttonState=="Icon")
+					//{
+					//	swfloader.name=imageSizeArray[i].name;//"swfClass"
+					//}
+					//else
+					//{
+						swfloader.name=libraryName;//"swfClass"
+					//}
+					swfloader.source = source;
+					
+					swfloader.width = imageSizeArrayItem.width;
+					swfloader.height = imageSizeArrayItem.height;
+					
+					addElement(swfloader);
+				//}
+			}
+			
+			
+			//**********************************************************************************************
+			//Export Sprint Object to Image File
+			//**********************************************************************************************
+			//**********************************************************************************************
+			
+			//Create Image
+			public function createSprintImageFiles(imageType:String, imageSizeArray:Array, saveFileDirectory:String, currentLinkageName:String, transparency:Boolean, backgroundColor:uint, quality:int, buttonState:String, realImageSize:Boolean, scaleToFitType:String, exportSequence:Boolean, selectedObjects:Sprite):void
+			{	
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " + " source:" +currentLinkageName);
+				//var tempSpriteClass:Sprite
+				var objectBoundingBox:Rectangle;
+				var matrix:Matrix;
+				
+				//var tempGap_width:Number;	
+				//var tempGap_height:Number;	
+				//var tempScaleX:Number =1;
+				//var tempScaleY:Number =1;
+				
+				AppPlusCache.showProcessingMessage("Please Wait", "Converting Flash to Image Files", root);
+				
+				//pre create new swfloaders for new png images
+				
+				//Movie Clip to image file
+				//TODO loop exportSequence 
+				
+				Trace.log(currentLinkageName+".png");
+				
+				//save Movie 
+				//var tempSprite:Sprite = tempSwfClass.content as Sprite;
+				objectBoundingBox = RemoteSingleton.boundingBox.getBoundingBox(null,selectedObjects,1);
+				
+				//Create Matrix (same as Button matrix) 
+				matrix=selectedObjects.transform.concatenatedMatrix;
+				
+				switch(scaleToFitType)
+				{
+					case "ScaleToFill":
+						
+						
+						break;
+					case "FitWidth":
+						
+						
+						break;
+					case "FitHeight":
+						
+						break;
+					case "ScaleToFit":
+						//NaturalSize
+						matrix.translate(-(selectedObjects.transform.pixelBounds.left + objectBoundingBox.left),  -(selectedObjects.transform.pixelBounds.top + objectBoundingBox.top));
+						
+						/*if( imageSizeArray[0].w - swfloader.contentWidth > 1)
+						{
+							//Centre the object in the middle of the mockup
+							swfloader.x = swfloader.x+((imageSizeArray[0].w - swfloader.contentWidth)/2);
+						}*/
+						break;
+					default:
+						break;
+				}
+				
+				
+				matrix.scale(imageSizeArray[0].width/selectedObjects.width,imageSizeArray[0].height/selectedObjects.height);
+				
+				var frameMatrixScale:Number = imageSizeArray[0].width/selectedObjects.width;
+				//imageSizeArray[0].height/selectedObjects.height
+				//**************************************************
+				//**************************************************
+				saveImageFIles(imageType, saveFileDirectory, currentLinkageName, transparency, backgroundColor, "", objectBoundingBox, selectedObjects as Sprite, matrix, quality, imageSizeArray[0], AppPlusCache.Instance.imageScaleArray[0], realImageSize, currentLinkageName);	
+				
+				if(this.numChildren>0)
+				{
+					removeAllElements();
+				}
+				
+				AppPlusCache.hideProcessingMessage();
+				//Clrean
+				//matrix1 = null;
+				//tempMovie = null;
+			}
+			
+			
+			public function convertFlash2Mockup(source:Object, imageSizeArray:Array, realImageSize:Boolean, buttonState:String, device:Object, direction:String, backgroundColor:uint, scaleToFitType:String):void
+			{
+				_scaleToFitType = scaleToFitType
+					
+				//Delete all pre added elements
+				if(this.numChildren>0)
+				{
+					removeAllElements();
+				}
+				
+				if(!imageSizeArray)
+				{
+					AppPlusCache.showPopupMessage("Error", "A non-Error", "Image size has not been definded.", root);
+				}
+				
+				/*if(AppPlusCache.Instance.currentSelectedObjects == null &&  AppPlusCache.Instance.currentWorkingObject)
+				{
+					Trace.log("AppPlusCache.Instance.currentSelectedObjects =  AppPlusCache.Instance.currentWorkingObject.content");
+				}*/
+				
+				//Trace.log(AppPlusCache.Instance.currentSelectedObjects.length);
+				for each(var selection:Object in AppPlusCache.Instance.currentSelectedObjects)
+				{
+					//Loop all selected object
+					source = selection.libraryClass;
+					//pre create new swfloaders for new png images
+					if(selection.libraryType==RemoteSingleton.objectSelector._SimpleButton)
+					{
+						//When the display object is Button
+						//TODO create mockup from button
+						setButtonRealDimension_MockupSwfSource(source, imageSizeArray, selection.libraryName, device, direction, backgroundColor, scaleToFitType);
+					}
+					else
+					{
+						setRealDimension_MockupSwfSource(source, imageSizeArray, AppPlusCache.Instance.currentDisplayObjectCurrentFrame, selection.libraryName, buttonState, device, direction, backgroundColor, scaleToFitType);
+					}
+				}
+			}
+			
+			private var _scaleToFitType:String;
+			//Button Real Size
+			private function setButtonRealDimension_MockupSwfSource(source:Object, imageSizeArray:Array, libraryName:String, device:Object, direction:String, backgroundColor:uint, scaleToFitType:String):void
+			{
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " );
+				//buttonStateArray = new Array("");
+				
+				for(var i:int = 0; i<imageSizeArray.length; i++)
+				{
+					
+					tempImageSizeArray = imageSizeArray;
+					//Loop all size of image here
+					var swfloader:SWFLoader = new SWFLoader();
+					var swfImage:Image = new Image();
+					var contener:Group = new Group();
+					var deviceImage:Image = new Image();
+					var bgColor:Rect = new Rect();
+					
+					//Check if that is come from Create Icon
+					if(imageSizeArray.length == 3 )
+					{
+						swfloader.addEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR,errorHandler);
+						swfloader.addEventListener(FlexEvent.INVALID, INVALIDErrorHandler);
+						swfloader.addEventListener(Event.COMPLETE, completeLoadedMockUpButton);	
+						swfloader.addEventListener(FlexEvent.UPDATE_COMPLETE, completeLoadedMockUpButton);
+					}
+					
+					contener.name=libraryName;//"swfClass"
+					
+					
+					bgColor.width 	= imageSizeArray[i].w;
+					bgColor.height 	= imageSizeArray[i].h;
+					bgColor.x 		= imageSizeArray[i].x;
+					bgColor.y 		= imageSizeArray[i].y;
+					bgColor.fill = new SolidColor(backgroundColor, 1);
+					
+					swfImage.name	= "mockupImage";
+					swfImage.width 	= imageSizeArray[i].w;
+					swfImage.height = imageSizeArray[i].h;
+					swfImage.x 		= imageSizeArray[i].x;
+					swfImage.y 		= imageSizeArray[i].y;
+					
+					
+					swfloader.source 	= source;
+					swfloader.name		= "mockupSwf";
+					/*swfloader.width 	= imageSizeArray[i].w;
+					swfloader.height 	= imageSizeArray[i].h;
+					swfloader.x 		= imageSizeArray[i].x;
+					swfloader.y 		= imageSizeArray[i].y;*/
+					
+					deviceImage.source = "assets/images/devices/images/"+device.model+".png";
+					deviceImage.width = imageSizeArray[i].width;
+					deviceImage.height = imageSizeArray[i].height;
+					
+					contener.width = imageSizeArray[i].width;
+					contener.height = imageSizeArray[i].height;
+					
+					contener.addElement(deviceImage);
+					contener.addElement(swfloader);
+					contener.addElement(bgColor);
+					contener.addElement(swfImage);
+					/*contener.scaleX = .2;
+					contener.scaleY = .2;*/
+					addElement(contener);
+				}
+			}
+			
+			
+			//Movie Real Size
+			private function setRealDimension_MockupSwfSource(source:Object, imageSizeArray:Array, _currentFrame:int, libraryName:String, buttonState:String, device:Object, direction:String, backgroundColor:uint, scaleToFitType:String ):void
+			{
+				currentFrame = _currentFrame;
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " +currentFrame);
+				
+				//Loop all size of image here
+				for(var i:int = 0; i<imageSizeArray.length; i++)
+				{
+					var swfloader:SWFLoader = new SWFLoader();
+					var swfImage:Image = new Image();
+					var contener:Group = new Group();
+					var deviceImage:Image = new Image();
+					var bgColor:Rect = new Rect();
+					
+					
+					//swfloader.loaderInfo.uncaughtErrorEvents.addEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR, uncaughtErrorHandler);
+					swfloader.addEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR,errorHandler);
+					swfloader.addEventListener(FlexEvent.INVALID, INVALIDErrorHandler);
+					swfloader.addEventListener(Event.COMPLETE, completeMockUpLoadedMovie);
+					swfloader.addEventListener(FlexEvent.UPDATE_COMPLETE, completeMockUpLoadedMovie);
+					
+					if(buttonState=="Icon")
+					{
+						contener.name=imageSizeArray[i].name;//"swfClass"
+					}
+					else
+					{
+						contener.name=libraryName;//"swfClass"
+					}
+					swfloader.source = source;
+					
+					bgColor.width 	= imageSizeArray[i].w;
+					bgColor.height 	= imageSizeArray[i].h;
+					bgColor.x 		= imageSizeArray[i].x;
+					bgColor.y 		= imageSizeArray[i].y;
+					
+					swfImage.name	= "mockupImage";
+					swfImage.width 	= imageSizeArray[i].w;
+					swfImage.height = imageSizeArray[i].h;
+					swfImage.x 		= imageSizeArray[i].x;
+					swfImage.y 		= imageSizeArray[i].y;
+					
+					swfloader.name		= "mockupSwf";
+					/*swfloader.width 	= imageSizeArray[i].w;
+					swfloader.height 	= imageSizeArray[i].h;
+					swfloader.x 		= imageSizeArray[i].x;
+					swfloader.y 		= imageSizeArray[i].y;*/
+					
+					deviceImage.width 	= imageSizeArray[i].width;
+					deviceImage.height 	= imageSizeArray[i].height;
+					
+					contener.width 		= imageSizeArray[i].width;
+					contener.height 	= imageSizeArray[i].height;
+					
+					bgColor.fill = new SolidColor(backgroundColor, 1);
+					deviceImage.source 	= "assets/images/devices/images/"+direction+"/"+device.model+".png";
+					
+					contener.addElement(deviceImage);
+					contener.addElement(swfloader);
+					contener.addElement(bgColor);
+					contener.addElement(swfImage);
+					addElement(contener);
+				}
+			}
+			
+			private function completeLoadedMockUpButton(event:Event):void
+			{
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - ");
+				removeSwfLoaderEvents(event);
+				
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " );
+				//buttonStateArray = new Array("_up","_over","_down");
+				
+				var simpleButton:SimpleButton = event.target.content as SimpleButton;
+				simpleButton.width = tempImageSizeArray[0].width;
+				simpleButton.height = tempImageSizeArray[0].height;
+				//create all the button stage
+				//Up Stage
+				var upStateSwfClass:SWFLoader = new SWFLoader();
+				upStateSwfClass.name="upState"+event.target.name; //upStateSwfClass
+				upStateSwfClass.addChild(simpleButton.upState);
+				upStateSwfClass.width = tempImageSizeArray[0].width;
+				upStateSwfClass.height = tempImageSizeArray[0].height;
+				addElement(upStateSwfClass);
+				//Over Stage
+				var overStateSwfClass:SWFLoader = new SWFLoader();
+				overStateSwfClass.name="overState"+event.target.name;//overStateSwfClass
+				overStateSwfClass.addChild(simpleButton.overState);
+				overStateSwfClass.width = tempImageSizeArray[0].width;
+				overStateSwfClass.height = tempImageSizeArray[0].height;
+				addElement(overStateSwfClass);
+				//Down Stage
+				var downStateSwfClass:SWFLoader = new SWFLoader();
+				downStateSwfClass.name="downState"+event.target.name;//downStateSwfClass
+				downStateSwfClass.addChild(simpleButton.downState);
+				downStateSwfClass.width = tempImageSizeArray[0].width;
+				downStateSwfClass.height = tempImageSizeArray[0].height;
+				addElement(downStateSwfClass);
+			}
+			
+			private function completeMockUpLoadedMovie(event:Event):void
+			{
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - ");
+				var tempMovie:MovieClip = event.target.content as MovieClip;
+				if(tempMovie != null)
+				{
+					tempMovie.gotoAndStop(currentFrame);
+				}
+				removeSwfLoaderEvents(event);
+				
+				var swfloader:SWFLoader = event.currentTarget as SWFLoader;
+				var mockupObject:Sprite = this.getChildAt(0) as Sprite
+				var mockupImage:Image = mockupObject.getChildByName("mockupImage") as Image;
+				//mockupImage.addEventListener(Event.COMPLETE, previewImageComplete);
+				mockupImage.source = getImageData_Mockup(swfloader, mockupImage.width, mockupImage.height, _scaleToFitType, false, false);
+				swfloader.visible = false;
+			}
+			
+			//**********************************************************************************************
+			//**********************************************************************************************
+			
+			//private var swfloader:SWFLoader;
+			//private var simpleButton:SimpleButton
+			//Movie Scale Size
+			private function setScaleDimension_SwfSource(source:Object, imageSizeArray:Object, _currentFrame:int, libraryName:String):void
+			{
+				currentFrame = _currentFrame;
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " +currentFrame +" source:" + source);
+				
+				//Loop all size of image here
+				var swfloader:SWFLoader = new SWFLoader();
+				//swfloader.loaderInfo.uncaughtErrorEvents.addEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR, uncaughtErrorHandler);
+				swfloader.addEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR,errorHandler);
+				swfloader.addEventListener(FlexEvent.INVALID, INVALIDErrorHandler);
+				swfloader.addEventListener(Event.COMPLETE, completeLoadedMovie);	
+				swfloader.addEventListener(FlexEvent.UPDATE_COMPLETE, updateCompleteHandler);
+				
+				swfloader.name= libraryName; // "swfClass";
+				swfloader.source = source;
+				
+				/*tempMovie = swfloader.content as MovieClip;
+				if(tempMovie)
+				{
+				tempMovie.gotoAndStop(currentFrame);
+				}*/
+				addElement(swfloader);
+			}
+			
+			
+			private function stopMovieClip(mc:MovieClip):void
+			{
+				mc.stop();
+				for (var i:int = 0; i < mc.numChildren; i++)
+				{
+					if (mc.getChildAt(i) is MovieClip) 
+					{
+						stopMovieClip(mc.getChildAt(i) as MovieClip);
+					}
+				}
+			}
+			public function getImageData(_swfloader:SWFLoader, _width:int, _height:int, scaleToFitType:String, isFrame:Boolean = false, removeElements:Boolean = true ):ByteArray
+			{
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " );
+				if(_swfloader)
+				{
+					if(_swfloader.content)
+					{
+						var objectBoundingBox:Rectangle;
+						var matrix:Matrix;
+						var bitmapData:BitmapData;
+						
+						var swfloaderWidth:Number;
+						var swfloaderHeight:Number;
+						var frameMatrixScale:Number;
+						var scaleWidth:Number;				
+						var scaleHeight:Number;
+						
+						var fileDocumentWidth:Number;
+						var fileDocumentHeight:Number;
+						
+						swfloaderWidth = _swfloader.content.width;
+						swfloaderHeight = _swfloader.content.height;
+						
+						if(isFrame)
+						{
+							fileDocumentWidth = _swfloader.content.transform.perspectiveProjection.projectionCenter.x*2;
+							fileDocumentHeight =_swfloader.content.transform.perspectiveProjection.projectionCenter.y*2;
+							
+							scaleWidth = _width/swfloaderWidth;
+							scaleHeight = _height/swfloaderHeight;
+							//scaleWidth = fileDocumentWidth/swfloaderWidth;
+							//scaleHeight = fileDocumentHeight/swfloaderHeight;
+						}
+						else
+						{
+							scaleWidth = _width/swfloaderWidth;
+							scaleHeight = _height/swfloaderHeight;
+						}
+						
+						//Delete all pre added elements
+						if(this.numChildren>0 && removeElements )
+						{
+							removeAllElements();
+						}
+						
+						//Stop movie at first frame
+						var tempMovie:MovieClip = _swfloader.content as MovieClip;
+						if(tempMovie)
+						{
+							stopMovieClip(tempMovie);
+						}
+						
+						//Create Movie 
+						var tempSprite:Sprite;
+						if(RemoteSingleton.objectSelector.getObjectType(_swfloader.content)==RemoteSingleton.objectSelector._SimpleButton)
+						{
+							var simpleButton:SimpleButton = _swfloader.content as SimpleButton;
+							tempSprite = simpleButton.upState as Sprite;
+						}
+						else
+						{
+							tempSprite = _swfloader.content as Sprite;
+						}
+						objectBoundingBox = RemoteSingleton.boundingBox.getBoundingBox(null,tempSprite,1);
+						
+						if(objectBoundingBox)
+						{
+							//Create Matrix (same as Button matrix) 
+							matrix=tempSprite.transform.concatenatedMatrix;
+							//**************************************************
+							//**************************************************
+							//defind the translate and scale
+							var translate_x:Number;				
+							var translate_y:Number;		
+							
+							switch(scaleToFitType)
+							{
+								case "ScaleToFill":
+									//Scale to fit the width and height
+									translate_x = 0;
+									translate_y = 0;
+									
+									if(isFrame)
+									{
+										scaleHeight =  fileDocumentHeight/swfloaderHeight;
+										scaleWidth =  fileDocumentWidth/swfloaderWidth;
+									}
+									break;
+								case "FitWidth":
+									//Scale to fit the width and move to the centre
+									//scale to fit width
+									if(isFrame)
+									{
+										frameMatrixScale = fileDocumentWidth/swfloaderWidth;
+										translate_y =(_height-((_width/swfloaderWidth) *swfloaderHeight))/2;
+									}
+									else
+									{
+										frameMatrixScale = scaleHeight = scaleWidth;
+										translate_y =  -(tempSprite.transform.pixelBounds.top + objectBoundingBox.top)+((_height-(swfloaderHeight*scaleHeight))/2);
+									}
+									translate_x = 0;
+									
+									break;
+								case "FitHeight":
+									//Scale to fit the heigh and move to the centre
+									//scale to fit height
+									if(isFrame)
+									{
+										frameMatrixScale =  fileDocumentHeight/swfloaderHeight;
+										translate_x =(_width-((_height/swfloaderHeight) *swfloaderWidth))/2;
+									}
+									else
+									{
+										frameMatrixScale = scaleWidth = scaleHeight;
+										translate_x = -(tempSprite.transform.pixelBounds.left + objectBoundingBox.left)+((_width-(swfloaderWidth*scaleWidth))/2);
+									}
+									translate_y = 0;
+									
+									break;
+								case "ScaleToFit":
+									//NaturalSize
+									//Not scale and fit the image in the centre
+									if(scaleWidth<=scaleHeight)
+									{
+										//scale to fit width
+										if(isFrame)
+										{
+											frameMatrixScale = fileDocumentWidth/swfloaderWidth;
+											translate_y =(_height-((_width/swfloaderWidth) *swfloaderHeight))/2;
+										}
+										else
+										{
+											frameMatrixScale = scaleHeight = scaleWidth;
+											translate_y =-(tempSprite.transform.pixelBounds.top + objectBoundingBox.top)+((_height-(swfloaderHeight*scaleHeight))/2);
+										}
+										translate_x = 0;
+									}
+									else
+									{
+										//scale to fit height
+										if(isFrame)
+										{
+											frameMatrixScale =  fileDocumentHeight/swfloaderHeight;
+											translate_x =(_width-((_height/swfloaderHeight) *swfloaderWidth))/2;
+										}
+										else
+										{
+											frameMatrixScale = scaleWidth = scaleHeight;
+											translate_x = -(tempSprite.transform.pixelBounds.left + objectBoundingBox.left)+((_width-(swfloaderWidth*scaleWidth))/2);
+										}
+										
+										translate_y = 0;
+									}
+									break;
+								default:
+									//NaturalSize
+									//Not scale and fit the image in the centre
+									translate_x = -(tempSprite.transform.pixelBounds.left + objectBoundingBox.left)+((_width-swfloaderWidth)/2);
+									translate_y = -(tempSprite.transform.pixelBounds.top + objectBoundingBox.top)+((_height-swfloaderHeight)/2);
+									scaleWidth = 1;
+									scaleHeight = 1;
+									frameMatrixScale=1;
+									break;
+							}
+							Trace.log("");
+							Trace.log("(swfloader:"+_swfloader+", _width:"+_width+", _height:"+_height+", scaleToFitType:"+scaleToFitType+", isFrame:"+isFrame+")");
+							Trace.log("scaleToFitType:"+scaleToFitType);
+							Trace.log("name:"+_swfloader.source);
+							Trace.log("isFrame:"+isFrame);
+							Trace.log("translate_x:"+translate_x+" = -("+tempSprite.transform.pixelBounds.left+" + "+objectBoundingBox.left+")+(("+_width+"-("+swfloaderWidth+"*"+scaleWidth+"))/2);");
+							Trace.log("translate_y:"+translate_y+" = -("+tempSprite.transform.pixelBounds.top+" + "+objectBoundingBox.top+")+(("+_height+"-("+swfloaderHeight+"*"+scaleHeight+"))/2);");
+							Trace.log("");
+							Trace.log("_width:"+_width+", swfloader Width:"+swfloaderWidth+", Content Width:"+_swfloader.content.width+", fileDocumentWidth:"+fileDocumentWidth+", Scale Width:"+scaleWidth);
+							Trace.log("_Height:"+_height+", swfloader Height:"+swfloaderHeight+", Content Height:"+_swfloader.content.height+", fileDocumentHeight:"+fileDocumentHeight+", Scale Height:"+scaleHeight);
+							Trace.log("");
+							
+							if(scaleToFitType== "ScaleToFill")
+							{
+								matrix.scale(scaleWidth,scaleHeight);
+							}
+							else
+							{
+								matrix.scale(frameMatrixScale,frameMatrixScale);
+							}
+							
+							matrix.translate(translate_x, translate_y);
+							
+							//**************************************************
+							//**************************************************
+							
+							bitmapData = new BitmapData(_width, _height, true , 0);
+							bitmapData.draw(tempSprite ,matrix);
+							
+							//PNG Encod as default
+							var ba:ByteArray = (new PNGEncoder()).encodeByteArray(bitmapData.getPixels(bitmapData.rect), bitmapData.rect.width, bitmapData.rect.height,true);
+							
+							//Test image: remove this test
+							/*var fs:FileStream = new FileStream();
+							fs.open(new File(File.desktopDirectory.nativePath+ "/export"+"/"+"temp.png"), FileMode.WRITE);
+							fs.writeBytes(ba, 0, ba.length);
+							fs.close();*/
+							
+							return ba;
+						}
+					}
+				}
+				return null;
+			}
+			
+			public function getImageData_HTMLPreview(_swfloader:SWFLoader, _width:int, _height:int, scaleToFitType:String, isFrame:Boolean = false, removeElements:Boolean = true , _xOffset:int=0, _yOffset:int=0, contentWidth:int=0, contentHeight:int=0):ByteArray
+			{
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " );
+				if(_swfloader)
+				{
+					if(_swfloader.content)
+					{
+						var objectBoundingBox:Rectangle;
+						var matrix:Matrix;
+						var bitmapData:BitmapData;
+						
+						var swfloaderWidth:Number;
+						var swfloaderHeight:Number;
+						var frameMatrixScale:Number;
+						var scaleWidth:Number;				
+						var scaleHeight:Number;
+						
+						var fileDocumentWidth:Number;
+						var fileDocumentHeight:Number;
+						
+						swfloaderWidth = _swfloader.content.width;
+						swfloaderHeight = _swfloader.content.height;
+						
+						if(isFrame)
+						{
+							fileDocumentWidth = _swfloader.content.transform.perspectiveProjection.projectionCenter.x*2;
+							fileDocumentHeight =_swfloader.content.transform.perspectiveProjection.projectionCenter.y*2;
+							
+							scaleWidth = _width/swfloaderWidth;
+							scaleHeight = _height/swfloaderHeight;
+							//scaleWidth = fileDocumentWidth/swfloaderWidth;
+							//scaleHeight = fileDocumentHeight/swfloaderHeight;
+						}
+						else
+						{
+							scaleWidth = _width/swfloaderWidth;
+							scaleHeight = _height/swfloaderHeight;
+						}
+						
+						//Delete all pre added elements
+						if(this.numChildren>0 && removeElements )
+						{
+							removeAllElements();
+						}
+						
+						//Stop movie at first frame
+						var tempMovie:MovieClip = _swfloader.content as MovieClip;
+						if(tempMovie)
+						{
+							stopMovieClip(tempMovie);
+						}
+						
+						//Create Movie 
+						var tempSprite:Sprite;
+						if(RemoteSingleton.objectSelector.getObjectType(_swfloader.content)==RemoteSingleton.objectSelector._SimpleButton)
+						{
+							var simpleButton:SimpleButton = _swfloader.content as SimpleButton;
+							tempSprite = simpleButton.upState as Sprite;
+						}
+						else
+						{
+							tempSprite = _swfloader.content as Sprite;
+						}
+						objectBoundingBox = RemoteSingleton.boundingBox.getBoundingBox(null,tempSprite,1);
+						
+						if(objectBoundingBox)
+						{
+							//Create Matrix (same as Button matrix) 
+							matrix=tempSprite.transform.concatenatedMatrix;
+							//**************************************************
+							//**************************************************
+							//defind the translate and scale
+							var translate_x:Number;				
+							var translate_y:Number;		
+							
+							switch(scaleToFitType)
+							{
+								case "ScaleToFill":
+									//Scale to fit the width and height
+									
+									translate_x = 0;
+									translate_y = 0;
+									
+									if(isFrame)
+									{
+										scaleHeight =  fileDocumentHeight/swfloaderHeight;
+										scaleWidth =  fileDocumentWidth/swfloaderWidth;
+									}
+									break;
+								case "FitWidth":
+									//Scale to fit the width and move to the centre
+									//scale to fit width
+									if(isFrame)
+									{
+										frameMatrixScale = fileDocumentWidth/swfloaderWidth;
+										translate_y =(_height-((_width/swfloaderWidth) *swfloaderHeight))/2;
+									}
+									else
+									{
+										frameMatrixScale = scaleHeight = scaleWidth;
+										translate_y =  -(tempSprite.transform.pixelBounds.top + objectBoundingBox.top)+((_height-(swfloaderHeight*scaleHeight))/2);
+									}
+									translate_x = 0;
+									
+									break;
+								case "FitHeight":
+									//Scale to fit the heigh and move to the centre
+									//scale to fit height
+									if(isFrame)
+									{
+										frameMatrixScale =  fileDocumentHeight/swfloaderHeight;
+										translate_x =(_width-((_height/swfloaderHeight) *swfloaderWidth))/2;
+									}
+									else
+									{
+										frameMatrixScale = scaleWidth = scaleHeight;
+										translate_x = -(tempSprite.transform.pixelBounds.left + objectBoundingBox.left)+((_width-(swfloaderWidth*scaleWidth))/2);
+									}
+									translate_y = 0;
+									
+									break;
+								case "ScaleToFit":
+									//NaturalSize
+									//Not scale and fit the image in the centre
+									if(scaleWidth<=scaleHeight)
+									{
+										//scale to fit width
+										if(isFrame)
+										{
+											frameMatrixScale = fileDocumentWidth/swfloaderWidth;
+											translate_y =(_height-((_width/swfloaderWidth) *swfloaderHeight))/2;
+										}
+										else
+										{
+											frameMatrixScale = scaleHeight = scaleWidth;
+											translate_y =-(tempSprite.transform.pixelBounds.top + objectBoundingBox.top)+((_height-(swfloaderHeight*scaleHeight))/2);
+										}
+										translate_x = 0;
+									}
+									else
+									{
+										//scale to fit height
+										if(isFrame)
+										{
+											frameMatrixScale =  fileDocumentHeight/swfloaderHeight;
+											translate_x =(_width-((_height/swfloaderHeight) *swfloaderWidth))/2;
+										}
+										else
+										{
+											frameMatrixScale = scaleWidth = scaleHeight;
+											translate_x = -(tempSprite.transform.pixelBounds.left + objectBoundingBox.left)+((_width-(swfloaderWidth*scaleWidth))/2);
+										}
+										
+										translate_y = 0;
+									}
+									break;
+								default:
+									//NaturalSize
+									//Not scale and fit the image in the centre
+									translate_x = -(tempSprite.transform.pixelBounds.left + objectBoundingBox.left)+((_width-swfloaderWidth)/2);
+									translate_y = -(tempSprite.transform.pixelBounds.top + objectBoundingBox.top)+((_height-swfloaderHeight)/2);
+									scaleWidth = 1;
+									scaleHeight = 1;
+									frameMatrixScale=1;
+									break;
+							}
+							Trace.log("");
+							Trace.log("(swfloader:"+_swfloader+", _width:"+_width+", _height:"+_height+", scaleToFitType:"+scaleToFitType+", isFrame:"+isFrame+")");
+							Trace.log("scaleToFitType:"+scaleToFitType);
+							Trace.log("name:"+_swfloader.source);
+							Trace.log("isFrame:"+isFrame);
+							Trace.log("translate_x:"+translate_x+" = -("+tempSprite.transform.pixelBounds.left+" + "+objectBoundingBox.left+")+(("+_width+"-("+swfloaderWidth+"*"+scaleWidth+"))/2);");
+							Trace.log("translate_y:"+translate_y+" = -("+tempSprite.transform.pixelBounds.top+" + "+objectBoundingBox.top+")+(("+_height+"-("+swfloaderHeight+"*"+scaleHeight+"))/2);");
+							Trace.log("");
+							Trace.log("_width:"+_width+", swfloader Width:"+swfloaderWidth+", Content Width:"+_swfloader.content.width+", fileDocumentWidth:"+fileDocumentWidth+", Scale Width:"+scaleWidth);
+							Trace.log("_Height:"+_height+", swfloader Height:"+swfloaderHeight+", Content Height:"+_swfloader.content.height+", fileDocumentHeight:"+fileDocumentHeight+", Scale Height:"+scaleHeight);
+							Trace.log("");
+							
+							if(scaleToFitType== "ScaleToFill")
+							{
+								matrix.scale(scaleWidth,scaleHeight);
+							}
+							else
+							{
+								matrix.scale(frameMatrixScale,frameMatrixScale);
+							}
+							
+							matrix.translate(translate_x, translate_y);
+							
+							//**************************************************
+							//**************************************************
+							
+							bitmapData = new BitmapData(_width, _height, true , 0);
+							bitmapData.draw(tempSprite ,matrix);
+							
+							//PNG Encod as default
+							var ba:ByteArray = (new PNGEncoder()).encodeByteArray(bitmapData.getPixels(bitmapData.rect), bitmapData.rect.width, bitmapData.rect.height,true);
+							
+							//Test image: remove this test
+							/*var fs:FileStream = new FileStream();
+							fs.open(new File(File.desktopDirectory.nativePath+ "/export"+"/"+"temp.png"), FileMode.WRITE);
+							fs.writeBytes(ba, 0, ba.length);
+							fs.close();*/
+							
+							return ba;
+						}
+					}
+				}
+				return null;
+			}
+			
+			public function getImageData_Mockup(_swfloader:SWFLoader, _width:int, _height:int, scaleToFitType:String, isFrame:Boolean = false, removeElements:Boolean = true ):ByteArray
+			{
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " );
+				if(_swfloader)
+				{
+					if(_swfloader.content)
+					{
+						var objectBoundingBox:Rectangle;
+						var matrix:Matrix;
+						var bitmapData:BitmapData;
+						
+						var swfloaderWidth:Number;
+						var swfloaderHeight:Number;
+						var frameMatrixScale:Number;
+						var scaleWidth:Number;				
+						var scaleHeight:Number;
+						
+						var fileDocumentWidth:Number;
+						var fileDocumentHeight:Number;
+						
+						swfloaderWidth = _swfloader.content.width;
+						swfloaderHeight = _swfloader.content.height;
+						
+						if(isFrame)
+						{
+							fileDocumentWidth = _swfloader.content.transform.perspectiveProjection.projectionCenter.x*2;
+							fileDocumentHeight =_swfloader.content.transform.perspectiveProjection.projectionCenter.y*2;
+							
+							scaleWidth = _width/swfloaderWidth;
+							scaleHeight = _height/swfloaderHeight;
+							//scaleWidth = fileDocumentWidth/swfloaderWidth;
+							//scaleHeight = fileDocumentHeight/swfloaderHeight;
+						}
+						else
+						{
+							scaleWidth = _width/swfloaderWidth;
+							scaleHeight = _height/swfloaderHeight;
+						}
+						
+						//Delete all pre added elements
+						if(this.numChildren>0 && removeElements )
+						{
+							removeAllElements();
+						}
+						
+						//Stop movie at first frame
+						
+						var tempMovie:MovieClip = _swfloader.content as MovieClip;
+						if(tempMovie)
+						{
+							stopMovieClip(tempMovie);
+						}
+						
+						//Create Movie 
+						var tempSprite:Sprite;
+						if(RemoteSingleton.objectSelector.getObjectType(_swfloader.content)==RemoteSingleton.objectSelector._SimpleButton)
+						{
+							var simpleButton:SimpleButton = _swfloader.content as SimpleButton;
+							tempSprite = simpleButton.upState as Sprite;
+						}
+						else
+						{
+							tempSprite = _swfloader.content as Sprite;
+						}
+						objectBoundingBox = RemoteSingleton.boundingBox.getBoundingBox(null,tempSprite,1);
+						
+						if(objectBoundingBox)
+						{
+							//Create Matrix (same as Button matrix) 
+							matrix=tempSprite.transform.concatenatedMatrix;
+							//**************************************************
+							//**************************************************
+							//defind the translate and scale
+							var translate_x:Number;				
+							var translate_y:Number;		
+							
+							switch(scaleToFitType)
+							{
+								case "ScaleToFill":
+									//Scale to fit the width and height
+									translate_x = 0;
+									translate_y = 0;
+									
+									if(isFrame)
+									{
+										scaleHeight =  fileDocumentHeight/swfloaderHeight;
+										scaleWidth =  fileDocumentWidth/swfloaderWidth;
+									}
+									break;
+								case "FitWidth":
+									//Scale to fit the width and move to the centre
+									//scale to fit width
+									if(isFrame)
+									{
+										frameMatrixScale = fileDocumentWidth/swfloaderWidth;
+										translate_y =(_height-((_width/swfloaderWidth) *swfloaderHeight))/2;
+									}
+									else
+									{
+										frameMatrixScale = scaleHeight = scaleWidth;
+										translate_y =  -(tempSprite.transform.pixelBounds.top + objectBoundingBox.top)+((_height-(swfloaderHeight*scaleHeight))/2);
+									}
+									translate_x = 0;
+									
+									break;
+								case "FitHeight":
+									//Scale to fit the heigh and move to the centre
+									//scale to fit height
+									if(isFrame)
+									{
+										frameMatrixScale =  fileDocumentHeight/swfloaderHeight;
+										translate_x =(_width-((_height/swfloaderHeight) *swfloaderWidth))/2;
+									}
+									else
+									{
+										frameMatrixScale = scaleWidth = scaleHeight;
+										translate_x = -(tempSprite.transform.pixelBounds.left + objectBoundingBox.left)+((_width-(swfloaderWidth*scaleWidth))/2);
+									}
+									translate_y = 0;
+									
+									break;
+								case "ScaleToFit":
+									//NaturalSize
+									//Not scale and fit the image in the centre
+									if(scaleWidth<=scaleHeight)
+									{
+										//scale to fit width
+										if(isFrame)
+										{
+											frameMatrixScale = fileDocumentWidth/swfloaderWidth;
+											translate_y =(_height-((_width/swfloaderWidth) *swfloaderHeight))/2;
+										}
+										else
+										{
+											frameMatrixScale = scaleHeight = scaleWidth;
+											translate_y =-(tempSprite.transform.pixelBounds.top + objectBoundingBox.top)+((_height-(swfloaderHeight*scaleHeight))/2);
+										}
+										translate_x = 0;
+									}
+									else
+									{
+										//scale to fit height
+										if(isFrame)
+										{
+											frameMatrixScale =  fileDocumentHeight/swfloaderHeight;
+											translate_x =(_width-((_height/swfloaderHeight) *swfloaderWidth))/2;
+										}
+										else
+										{
+											frameMatrixScale = scaleWidth = scaleHeight;
+											translate_x = -(tempSprite.transform.pixelBounds.left + objectBoundingBox.left)+((_width-(swfloaderWidth*scaleWidth))/2);
+										}
+										
+										translate_y = 0;
+									}
+									break;
+								default:
+									//NaturalSize
+									//Not scale and fit the image in the centre
+									translate_x = -(tempSprite.transform.pixelBounds.left + objectBoundingBox.left)+((_width-swfloaderWidth)/2);
+									translate_y = -(tempSprite.transform.pixelBounds.top + objectBoundingBox.top)+((_height-swfloaderHeight)/2);
+									scaleWidth = 1;
+									scaleHeight = 1;
+									frameMatrixScale=1;
+									break;
+							}
+							Trace.log("");
+							Trace.log("(swfloader:"+_swfloader+", _width:"+_width+", _height:"+_height+", scaleToFitType:"+scaleToFitType+", isFrame:"+isFrame+")");
+							Trace.log("scaleToFitType:"+scaleToFitType);
+							Trace.log("name:"+_swfloader.source);
+							Trace.log("isFrame:"+isFrame);
+							Trace.log("translate_x:"+translate_x+" = -("+tempSprite.transform.pixelBounds.left+" + "+objectBoundingBox.left+")+(("+_width+"-("+swfloaderWidth+"*"+scaleWidth+"))/2);");
+							Trace.log("translate_y:"+translate_y+" = -("+tempSprite.transform.pixelBounds.top+" + "+objectBoundingBox.top+")+(("+_height+"-("+swfloaderHeight+"*"+scaleHeight+"))/2);");
+							Trace.log("");
+							Trace.log("_width:"+_width+", swfloader Width:"+swfloaderWidth+", Content Width:"+_swfloader.content.width+", fileDocumentWidth:"+fileDocumentWidth+", Scale Width:"+scaleWidth);
+							Trace.log("_Height:"+_height+", swfloader Height:"+swfloaderHeight+", Content Height:"+_swfloader.content.height+", fileDocumentHeight:"+fileDocumentHeight+", Scale Height:"+scaleHeight);
+							Trace.log("");
+							
+							if(scaleToFitType== "ScaleToFill")
+							{
+								matrix.scale(scaleWidth,scaleHeight);
+							}
+							else
+							{
+								matrix.scale(frameMatrixScale,frameMatrixScale);
+							}
+							
+							matrix.translate(translate_x, translate_y);
+							
+							//**************************************************
+							//**************************************************
+							
+							bitmapData = new BitmapData(_width, _height, true , 0);
+							bitmapData.draw(tempSprite ,matrix);
+							
+							//PNG Encod as default
+							var ba:ByteArray = (new PNGEncoder()).encodeByteArray(bitmapData.getPixels(bitmapData.rect), bitmapData.rect.width, bitmapData.rect.height,true);
+							
+							//Test image: remove this test
+							/*var fs:FileStream = new FileStream();
+							fs.open(new File(File.desktopDirectory.nativePath+ "/export"+"/"+"temp.png"), FileMode.WRITE);
+							fs.writeBytes(ba, 0, ba.length);
+							fs.close();*/
+							
+							return ba;
+						}
+					}
+				}
+				return null;
+			}
+			
+			/*function exportMovieImage( imageType:String, imageSizeArray:Array, saveFileDirectory:String, currentLinkageName:String, transparency:Boolean, backgroundColor:uint, quality:int, buttonState:String, realImageSize:Boolean, scaleToFitType:String, exportSequence:Boolean):void
+			{
+			var tempSwfClass:SWFLoader
+			var objectBoundingBox:Rectangle;
+			var matrix:Matrix;
+			
+			var tempGap_width:Number;	
+			var tempGap_height:Number;	
+			var tempScaleX:Number =1;
+			var tempScaleY:Number =1;
+			
+			
+			AppPlusCache.showProcessingMessage("Please Wait", "Converting Flash to Image Files", root);
+			
+			var source:Object;
+			
+			
+			//Movie Clip to image file
+			//loop exportSequence 
+			var totalExportSequence:int 
+			var tempMovie:MovieClip
+			
+			
+			for(var n:int = 0; n<imageSizeArray.length; n++)
+			{
+			//if Icon 
+			if(buttonState=="Icon")
+			{
+			this.getChildAt(0)
+			
+			tempSwfClass = this.getChildByName(imageSizeArray[n].name)as SWFLoader;//"swfClass"
+			}
+			else
+			{
+			tempSwfClass = this.getChildByName(selection.libraryName) as SWFLoader;//"swfClass"
+			}
+			
+			tempMovie = tempSwfClass.content as MovieClip;
+			//Check is exportSequence
+			if(exportSequence)
+			{
+			currentFrame = 1;
+			totalExportSequence = tempMovie.totalFrames;
+			}
+			else
+			{
+			totalExportSequence = currentFrame;
+			}
+			
+			//loop exportSequence
+			for(var f:int = currentFrame; f<=totalExportSequence; f++)
+			{
+			Trace.log(currentLinkageName+AppPlusCache.Instance.sequenceImageNumber(f,4)+".png");
+			//defind the linkageName
+			//go to and stop the frame sequence
+			tempMovie.gotoAndStop(f);
+			
+			
+			//save Movie 
+			//var tempSprite:Sprite = tempSwfClass.content as Sprite;
+			objectBoundingBox = RemoteSingleton.boundingBox.getBoundingBox(null,tempMovie,1);
+			
+			//Create Matrix (same as Button matrix) 
+			matrix=tempMovie.transform.concatenatedMatrix;
+			if(realImageSize)
+			{
+			//When user definad the size by width and height
+			//translate to center
+			//**************************************************
+			//**************************************************
+			//defind the translate and scale	
+			Trace.log("tempGap_width:"+tempGap_width+", tempGap_height:"+tempGap_height)
+			tempGap_width = (tempSwfClass.width - tempMovie.width);	
+			tempGap_height = (tempSwfClass.height - tempMovie.height);	
+			tempScaleX =1;
+			tempScaleY =1;
+			
+			switch(scaleToFitType)
+			{
+			case "ScaleToFill":
+			//Scale to fit the width and height
+			//Find which scale -> defind the value -> apply the scale
+			if(tempGap_width != 0)
+			{
+			tempScaleX = (tempSwfClass.width/tempMovie.width );
+			}
+			if(tempGap_height != 0)
+			{
+			tempScaleY = (tempSwfClass.height/tempMovie.height );
+			}
+			matrix.scale(tempScaleX, tempScaleY);
+			
+			//translate to fit in the image
+			matrix.translate(-(tempMovie.transform.pixelBounds.left + objectBoundingBox.left)*tempScaleX, 
+			-(tempMovie.transform.pixelBounds.top + objectBoundingBox.top)*tempScaleY);
+			break;
+			case "FitWidth":
+			if(tempGap_width != 0)
+			{
+			tempScaleX = (tempSwfClass.width/tempMovie.width );
+			}
+			matrix.scale(tempScaleX, tempScaleY);
+			//translate to fit in the image
+			matrix.translate(-(tempMovie.transform.pixelBounds.left + objectBoundingBox.left)*tempScaleX, 
+			-(tempMovie.transform.pixelBounds.top + objectBoundingBox.top)*tempScaleY);
+			break;
+			case "FitHeight":
+			if(tempGap_height != 0)
+			{
+			tempScaleY = (tempSwfClass.height/tempMovie.height );
+			}
+			matrix.scale(tempScaleX, tempScaleY);
+			//translate to fit in the image
+			matrix.translate(-(tempMovie.transform.pixelBounds.left + objectBoundingBox.left)*tempScaleX, 
+			-(tempMovie.transform.pixelBounds.top + objectBoundingBox.top)*tempScaleY);
+			break;
+			case "ScaleToFit":
+			default:
+			//NaturalSize
+			matrix.translate(-(tempMovie.transform.pixelBounds.left + objectBoundingBox.left)+(tempGap_width/2), 
+			-(tempMovie.transform.pixelBounds.top + objectBoundingBox.top)+(tempGap_height/2));
+			break;
+			}
+			
+			//**************************************************
+			//**************************************************
+			}
+			else
+			{
+			//when user defaind the size be scale
+			matrix.scale(imageSizeArray[n].scale, imageSizeArray[n].scale);
+			matrix.translate(	-(tempMovie.transform.pixelBounds.left + objectBoundingBox.left)*imageSizeArray[n].scale,
+			-(tempMovie.transform.pixelBounds.top + objectBoundingBox.top)*imageSizeArray[n].scale);
+			}
+			
+			var imageName:String;
+			if(exportSequence)
+			{
+			imageName = selection.libraryName+AppPlusCache.Instance.sequenceImageNumber(f,4);
+			}
+			else
+			{
+			imageName = selection.libraryName;
+			}
+			saveImageFIles(imageType, saveFileDirectory, imageName, transparency, backgroundColor, "", objectBoundingBox, tempMovie as Sprite, matrix, quality, imageSizeArray[n], realImageSize, currentLinkageName);	
+			}
+			}
+			}*/
+			
+			public function exportScale9GridMovieClipPNG(myMovieClipClass:MovieClip,imageType:String, imageScale:Object, saveFileDirectory:String, currentLinkageName:String, dimensions:Boolean):CssAttributes
+			{
+				//create scale 9 grid png file
+				var cssAttributes:CssAttributes = new CssAttributes();
+				var objectBoundingBox:Rectangle = RemoteSingleton.boundingBox.getBoundingBox(null,myMovieClipClass,1)
+				
+				//original movie size not scale
+				var originalMatrix:Matrix=new Matrix();
+				
+				if(dimensions)
+				{
+					//dimensions on/off
+					if(Math.round(myMovieClipClass.y + objectBoundingBox.top)!=0)
+					{
+						cssAttributes.top = Math.round(myMovieClipClass.y + objectBoundingBox.top)+"px";
+					}
+					if(Math.round(myMovieClipClass.x + objectBoundingBox.left)!=0){
+						cssAttributes.left = Math.round(myMovieClipClass.x + objectBoundingBox.left)+"px";
+					}
+					if(Math.round(myMovieClipClass.width) != 0)
+					{
+						cssAttributes.width = Math.round(myMovieClipClass.width)+"px";
+					}
+					if(Math.round(myMovieClipClass.height) != 0)
+					{
+						cssAttributes.height = Math.round(myMovieClipClass.height)+"px";
+					}
+				}
+				
+				var transparency:Boolean = true;
+				var backgroundColor:uint =0;
+				var buttonState:String = "";
+				var quality:int = 100;
+				var realImageSize:Boolean = true;
+				
+				var imageSize:Object = new Object();
+				imageSize.width = Math.ceil(myMovieClipClass.width / myMovieClipClass.transform.matrix.a)
+				imageSize.height = Math.ceil(myMovieClipClass.height / myMovieClipClass.transform.matrix.d);
+				imageSize.name = "";
+				
+				/*var tempMovie:MovieClip = new MovieClip();
+				tempMovie.addChild(myMovieClipClass);*/
+				
+				saveImageFIles(imageType, saveFileDirectory, currentLinkageName, transparency, backgroundColor, buttonState, objectBoundingBox, myMovieClipClass , originalMatrix, quality, imageSize, AppPlusCache.Instance.imageScaleArray[0], realImageSize, currentLinkageName);
+				
+				return cssAttributes;
+			}
+			
+			public function exportMovieClipPNG(myMovieClipClass:MovieClip,imageType:String, imageScale:Object, saveFileDirectory:String, currentLinkageName:String, isBackgroundImage:Boolean=false):CssAttributes
+			{
+				var cssAttributes:CssAttributes = new CssAttributes();
+				//imageType:String, imageSizeArray:Array, saveFileDirectory:String, currentLinkageName:String, transparency:Boolean, backgroundColor:uint, quality:int, buttonState:String, realImageSize:Boolean, scaleToFitType:String, exportSequence:Boolean
+				
+				var objectBoundingBox:Rectangle = objectBoundingBox = RemoteSingleton.boundingBox.getBoundingBox(null,myMovieClipClass,1, isBackgroundImage);
+				//myMovieClipClass.getBounds(myMovieClipClass);
+				
+				//Create Matrix (same as Movie matrix) 
+				var matrix:Matrix=myMovieClipClass.transform.concatenatedMatrix;
+				var tempGap_width:int = ( myMovieClipClass.width-myMovieClipClass.width );	
+				var tempGap_height:int = (myMovieClipClass.height-myMovieClipClass.height );	
+				
+				//matrix.scale(myMovieClipClass.scale, myMovieClipClass.scale);
+				matrix.translate(-(myMovieClipClass.transform.pixelBounds.left + objectBoundingBox.left)+(tempGap_width/2), 
+					-(myMovieClipClass.transform.pixelBounds.top + objectBoundingBox.top)+(tempGap_height/2));
+				
+				if(Math.round(myMovieClipClass.y + objectBoundingBox.top) != 0)
+				{
+					cssAttributes.top = Math.round(myMovieClipClass.y + objectBoundingBox.top)+"px";
+				}
+				if(Math.round(myMovieClipClass.x + objectBoundingBox.left) != 0)
+				{
+					cssAttributes.left = Math.round(myMovieClipClass.x + objectBoundingBox.left)+"px";
+				}
+				
+				var transparency:Boolean = true;
+				var backgroundColor:uint =0;
+				var buttonState:String = "";
+				var quality:int = 100;
+				var realImageSize:Boolean = true;
+				
+				var imageSize:Object = new Object();
+				imageSize.width = Math.ceil(objectBoundingBox.width)
+				imageSize.height = Math.ceil(objectBoundingBox.height);
+				imageSize.name = "";
+				
+				/*var tempMovie:MovieClip = new MovieClip();
+				tempMovie.addChild(myMovieClipClass);*/
+				
+				saveImageFIles(imageType, saveFileDirectory, currentLinkageName, transparency, backgroundColor, buttonState, objectBoundingBox, myMovieClipClass , matrix, quality, imageSize, AppPlusCache.Instance.imageScaleArray[0], realImageSize, currentLinkageName);
+				
+				return cssAttributes;
+			}
+			
+			public function exportShapePNG(myShapeClass:Shape,imageType:String, imageScale:Object, saveFileDirectory:String, currentLinkageName:String):void
+			{
+				//imageType:String, imageSizeArray:Array, saveFileDirectory:String, currentLinkageName:String, transparency:Boolean, backgroundColor:uint, quality:int, buttonState:String, realImageSize:Boolean, scaleToFitType:String, exportSequence:Boolean
+				
+				var objectBoundingBox:Rectangle = myShapeClass.getBounds(myShapeClass);
+				var bitmapData:BitmapData = new BitmapData(Math.ceil(myShapeClass.width*imageScale.scale), Math.ceil(myShapeClass.height*imageScale.scale), true, 0xFF0000);
+				var matrix:Matrix=new Matrix((myShapeClass.width/objectBoundingBox.width)*imageScale.scale, 0, 0, (myShapeClass.height/objectBoundingBox.height)*imageScale.scale, 0, 0);
+				var point:Point;
+				
+				point = new Point(objectBoundingBox.x,objectBoundingBox.y);
+				matrix.transformPoint(point);
+				matrix.tx = -objectBoundingBox.left;
+				matrix.ty = -objectBoundingBox.top;
+				//matrix.translate(objectBoundingBox.x,objectBoundingBox.y);
+				
+				
+				var transparency:Boolean = true;
+				var backgroundColor:uint =0;
+				var buttonState:String = "";
+				var quality:int = 100;
+				var realImageSize:Boolean = true;
+				
+				var imageSize:Object = new Object();
+				imageSize.width = Math.ceil(myShapeClass.width)
+				imageSize.height = Math.ceil(myShapeClass.height);
+				imageSize.name = "";
+				
+				//mainTempMovie.addChild(myShapeClass);
+				
+				saveShapeToImageFIles(imageType,saveFileDirectory, currentLinkageName, transparency, backgroundColor, buttonState, objectBoundingBox, myShapeClass , matrix, quality, imageSize, AppPlusCache.Instance.imageScaleArray[0], realImageSize, currentLinkageName);
+				
+				//saveImageFIles(imageType,saveFileDirectory, currentLinkageName, transparency, backgroundColor, buttonState, objectBoundingBox, tempMovie , matrix, quality, imageSize, AppPlusCache.Instance.imageScaleArray[0], realImageSize, currentLinkageName);
+			}
+			
+			//var mainTempMovie:MovieClip = new MovieClip();
+			
+			//***********************************************
+			//************************Simple Button
+			//***********************************************
+			public function getBoundingBox( pDORect:Rectangle, pFilters:Array ):Rectangle
+			{
+				// Get the first filter and compute his bounding box
+				var filter:BitmapFilter= pFilters[ 0 ];
+				if (filter == null ) throw new TypeError( "The filters Array must contains at least one filter" );
+				Trace.log(pDORect.width+" "+pDORect.height);
+				if((pDORect.width==0 && pDORect.height==0 )||pDORect==null)
+				{
+					return null;
+				}
+				try{ 
+					var b:BitmapData = new BitmapData( pDORect.width, pDORect.height, false );
+				}
+				catch ( errorEvent:Error )
+				{ 
+					AppPlusCache.showPopupMessage("Error", "Error", errorEvent.message, AppPlusCache.Instance._root);
+					return null;
+				}
+				var r:Rectangle = b.generateFilterRect( pDORect, filter );
+				b.dispose();
+				
+				// Helps to find the largest bounding box
+				var le:Number = r.left;
+				var to:Number = r.top;
+				var ri:Number = r.right;
+				var bo:Number = r.bottom;
+				
+				// How many filters have been applied to the MovieClip ?
+				var ln:int = pFilters.length;
+				
+				for (var i:int = 1; i < ln ; i++)
+				{
+					//Trace.log(r.width+" "+r.height);
+					if( (r.width>0 && r.width < 6000) && (r.height>0 && r.height < 6000))
+					{
+						b = new BitmapData( r.width, r.height, false );
+						
+						filter = pFilters[ i ];
+						
+						//DropShadowFilter fileter is DropShadowFilter
+						// TODO add x2
+						
+						// Find the next flash.geom.Rectangle object starting with the one we find in the previous iteration
+						r = b.generateFilterRect( r, filter );
+						
+						// Release the memory used.
+						// Notice that this BitmapData object is only necessary for computing the filtered bounding box
+						b.dispose();
+						
+						// If the size of new Rectangle is larger that the previous one, we update the values for the bounding box
+						if ( r.left  < le ) le = r.left;
+						if ( r.top  < to ) to = r.top;
+						if ( r.right > ri ) ri = r.right;
+						if ( r.bottom > bo ) bo = r.bottom;
+					}
+				}
+				
+				b = null;
+				
+				// Return the Rectangle object that corresponds to the largest bounding box
+				r = new Rectangle();
+				r.left  = le;
+				r.top  = to;
+				r.right = ri;
+				r.bottom = bo;
+				
+				return r;
+			}
+			
+			public function getButtonObjectBoundingBox(simpleButton:SimpleButton):Rectangle
+			{
+				var imageScale:Number = 1;
+				
+				//if(imageDPI == 144 )
+				//imageScale = 2;	
+				//if(imageDPI == 108)
+				//imageScale = 1.5;	
+				
+				if(simpleButton == null)
+				{
+					return null;
+				}
+				var rectangleWithFilters:Rectangle;
+				
+				var r:Rectangle;
+				// Helps to find the largest bounding box
+				var le:Number;
+				var to:Number;
+				var ri:Number;
+				var bo:Number;
+				var initial:Boolean = true;
+				
+				for(var p:int=0; p<buttonStateArray.length;p++)
+				{
+					var tempStateSprite:Sprite;
+					
+					switch(buttonStateArray[p])
+					{
+						case "_up":
+							tempStateSprite = simpleButton.upState as Sprite;
+							break;
+						case "_over":
+							tempStateSprite = simpleButton.overState as Sprite;
+							break;
+						case "_down":
+							tempStateSprite = simpleButton.downState as Sprite;
+							break;
+					}
+					if(!tempStateSprite)
+					{
+						//Show message When tempStateSprite is null
+						Trace.log("Error: "+buttonStateArray[p]+" state is missing.");
+						return new Rectangle();
+					}
+					
+					for(var j:int = 0; j<tempStateSprite.numChildren; j++)
+					{
+						
+						r = new Rectangle(Math.ceil(tempStateSprite.getChildAt(j).x),Math.ceil(tempStateSprite.getChildAt(j).y),Math.ceil(tempStateSprite.getChildAt(j).width*tempStateSprite.scaleX)*imageScale, Math.ceil(tempStateSprite.getChildAt(j).height*tempStateSprite.scaleY)*imageScale);
+						
+						if(initial)
+						{
+							le = r.left;
+							to = r.top;
+							ri = r.right;
+							bo = r.bottom;
+							initial = false;
+						}
+						
+						if(tempStateSprite.getChildAt(j).filters.length>0)
+						{
+							// If the size of new Rectangle is larger that the previous one, we update the values for the bounding box
+							rectangleWithFilters = getBoundingBox(r,tempStateSprite.getChildAt(j).filters);
+						}
+						else
+						{
+							rectangleWithFilters = new Rectangle(Math.ceil(tempStateSprite.getChildAt(j).x),Math.ceil(tempStateSprite.getChildAt(j).y),Math.ceil(tempStateSprite.getChildAt(j).width*tempStateSprite.scaleX)*imageScale, Math.ceil(tempStateSprite.getChildAt(j).height*tempStateSprite.scaleY)*imageScale);
+						}
+						
+						if(rectangleWithFilters==null)
+						{
+							return null;
+						}
+						if ( (rectangleWithFilters.left)  < le ) le = (rectangleWithFilters.left);
+						if ( (rectangleWithFilters.top)  < to ) to = (rectangleWithFilters.top);
+						
+						if ( (rectangleWithFilters.right-rectangleWithFilters.x) > ri ) ri = (rectangleWithFilters.right-rectangleWithFilters.x);
+						if ( (rectangleWithFilters.bottom-rectangleWithFilters.y) > bo ) bo = (rectangleWithFilters.bottom-rectangleWithFilters.y);
+					}
+				}
+				
+				// Return the Rectangle object that corresponds to the largest bounding box
+				r = new Rectangle();
+				r.left  = Math.ceil(le);
+				r.top  = Math.ceil(to);
+				r.right = Math.ceil(ri);
+				r.bottom = Math.ceil(bo);
+				
+				return r;
+			}
+			
+			
+			//***********************************************
+			//************************End Simple Button
+			//***********************************************
+			
+			public function exportSimpleButtonPNG(simpleButton:SimpleButton,imageType:String, imageScale:Object, saveFileDirectory:String, currentLinkageName:String):CssAttributes
+			{
+				var cssAttributes:CssAttributes = new CssAttributes();
+				
+				var objectBoundingBox:Rectangle;
+				var matrix:Matrix;
+				
+				var transparency:Boolean = true;
+				var backgroundColor:uint =0;
+				var buttonState:String = "";
+				var quality:int = 100;
+				var realImageSize:Boolean = true;
+				
+				var imageSize:Object = new Object();
+				
+				var tempGap_width:Number;	
+				var tempGap_height:Number;	
+				var e:int;
+				
+				objectBoundingBox = getButtonObjectBoundingBox(simpleButton);
+				
+				for(var j:int=0; j<buttonStateArray.length;j++)
+				{
+					var tempStateSprite:Sprite;
+					
+					
+					switch(buttonStateArray[j])
+					{
+						case "_up":
+							tempStateSprite = simpleButton.upState as Sprite;
+							if(tempStateSprite)
+							{
+								//var rectangleWithFilters:Rectangle;
+								/*var rectInitial:Rectangle = tempStateSprite.getBounds(tempStateSprite);
+								var rect:Rectangle =new Rectangle(Math.ceil(rectInitial.x),Math.ceil(rectInitial.y),Math.ceil((tempStateSprite.width*simpleButton.scaleX)), Math.ceil((tempStateSprite.height*simpleButton.scaleY)));
+								
+								if(tempStateSprite.getChildAt(0).filters.length>0)
+								{
+								objectBoundingBox = getBoundingBox(rect,tempStateSprite.getChildAt(0).filters);
+								}else
+								{
+								objectBoundingBox = rect;//new Rectangle(0,0,Math.ceil(tempStateSprite.getChildAt(0).width*tempStateSprite.scaleX)*imageScale, Math.ceil(tempStateSprite.getChildAt(0).height*tempStateSprite.scaleY)*imageScale);
+								}*/
+								//objectBoundingBox = RemoteSingleton.boundingBox.getBoundingBox(null,tempStateSprite,1);
+								//Create Matrix (same as Movie matrix) 
+								matrix=tempStateSprite.transform.concatenatedMatrix;
+								tempGap_width = ( tempStateSprite.width - tempStateSprite.width);	
+								tempGap_height = (tempStateSprite.height - tempStateSprite.height);	
+								
+								//NaturalSize
+								matrix.translate( - (tempStateSprite.transform.pixelBounds.left + objectBoundingBox.left) + (tempGap_width/2), 
+									- (tempStateSprite.transform.pixelBounds.top + objectBoundingBox.top) + (tempGap_height/2));
+								
+								imageSize.width 	= Math.ceil(objectBoundingBox.width)
+								imageSize.height 	= Math.ceil(objectBoundingBox.height);
+								imageSize.name 		= "";
+								
+								cssAttributes.top 			= Math.round(simpleButton.y + objectBoundingBox.top)+"px";
+								cssAttributes.left 			= Math.round(simpleButton.x + objectBoundingBox.left)+"px";
+								cssAttributes.width			= objectBoundingBox.width +"px";
+								cssAttributes.height		= objectBoundingBox.height +"px";
+								cssAttributes.outlineWidth	= "0";
+								
+								//TODO Find background color
+								//tempHtmlExportHolder 			= flashObjectSelector(tempExpObj, movieClip.getChildAt(y), tempHtmlExportHolder, index, imageScale);
+							}
+							break;
+						case "_over":
+							tempStateSprite = simpleButton.overState as Sprite;
+							
+							//TODO Find background color
+							//tempHtmlExportHolder 			= flashObjectSelector(tempExpObj, movieClip.getChildAt(y), tempHtmlExportHolder, index, imageScale);
+							break;
+						case "_down":
+							tempStateSprite = simpleButton.downState as Sprite;
+							if(tempStateSprite)
+							{
+								objectBoundingBox = RemoteSingleton.boundingBox.getBoundingBox(null,tempStateSprite,1);
+								
+								//TODO Find background color
+								//tempHtmlExportHolder 			= flashObjectSelector(tempExpObj, movieClip.getChildAt(y), tempHtmlExportHolder, index, imageScale);
+							}
+							break;
+					}
+					
+					if(tempStateSprite)
+					{
+						//Hide text
+						for(e = 0; e<tempStateSprite.numChildren; e++)
+						{
+							if(tempStateSprite.getChildAt(e) is TextField  )
+							{
+								tempStateSprite.getChildAt(e).visible = false;	
+							}
+						}
+						
+						//Save image
+						saveImageFIles(imageType, saveFileDirectory, currentLinkageName, transparency, backgroundColor, buttonStateArray[j], objectBoundingBox, tempStateSprite, matrix, quality, imageSize, AppPlusCache.Instance.imageScaleArray[0], realImageSize, currentLinkageName);
+						
+						//Show text
+						for(e = 0; e<tempStateSprite.numChildren; e++)
+						{
+							if(tempStateSprite.getChildAt(e) is TextField  )
+							{
+								tempStateSprite.getChildAt(e).visible = true;	
+							}
+						}
+					}
+				}
+				
+				
+				return cssAttributes;
+			}
+			
+			private function saveShapeToImageFIles(imageType:String, saveFileDirectory:String, currentLinkageName:String, _transparency:Boolean, _backgroundColor:uint, buttonState:String, objectBoundingBox:Rectangle, tempShape:Shape, matrix:Matrix, quality:int, imageSize:Object, imageScale:Object, realImageSize:Boolean, imageName:String):void
+			{
+				imageName = AppPlusCache.Instance.validateFileName(imageName);
+				
+				Trace.log("imageName:"+imageName+" "+imageSize.width+" "+imageSize.height+" "+_transparency+" "+_backgroundColor);
+				if( buttonState != "" ||((imageSize.width>0 && imageSize.width < 6000) && (imageSize.height>0 && imageSize.height < 6000) ) )
+				{
+					Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " );
+					//Defind local values
+					var fs:FileStream = new FileStream();
+					var ba:ByteArray;
+					var bitmapData:BitmapData;
+					
+					//Draw Bitmap
+					if(realImageSize  )
+					{
+						//When user definad the size by width and height
+						
+						Trace.log("** realImageSize:"+imageSize.width+" "+imageSize.height+" "+_transparency+" "+ _backgroundColor);
+						bitmapData = new BitmapData(imageSize.width, imageSize.height, _transparency , _backgroundColor);
+						bitmapData.draw(tempShape ,matrix);
+						
+						if(imageType == ".jpg")
+						{
+							//JPG Encode
+							ba = (new JPEGEncoder(quality)).encodeByteArray(bitmapData.getPixels(bitmapData.rect),bitmapData.rect.width, bitmapData.rect.height,false);
+						}
+						else if(imageType == ".gif")
+						{
+							//GIF Encode
+							//ba = encodeGIF(tempShape, _backgroundColor, objectBoundingBox, 1, matrix, bitmapData,_transparency, quality, realImageSize);
+						}
+						else
+						{
+							//PNG Encod as default
+							ba = (new PNGEncoder()).encodeByteArray(bitmapData.getPixels(bitmapData.rect),bitmapData.rect.width, bitmapData.rect.height,_transparency);
+						}
+						
+						//When user save image with definded width and height
+						//fs.open(new File( saveFileDirectory+"/"+currentLinkageName+buttonState+imageScale.name+imageType), FileMode.WRITE);
+						fs.open(new File( saveFileDirectory+"/"+imageName+buttonState+imageSize.name+imageType), FileMode.WRITE);
+					}
+					else
+					{
+						//When user deinded the size by scale
+						
+						Trace.log("** ScaleImageSize:"+objectBoundingBox.width+" "+imageScale.scale+" "+objectBoundingBox.height+" "+imageScale.scale+" "+ _transparency +" "+_backgroundColor);
+						bitmapData = new BitmapData(objectBoundingBox.width*imageScale.scale, objectBoundingBox.height*imageScale.scale, _transparency , _backgroundColor);
+						bitmapData.draw(tempShape ,matrix);
+						
+						if(imageType == ".jpg")
+						{
+							//JPG Encode
+							ba = (new JPEGEncoder(quality)).encodeByteArray(bitmapData.getPixels(bitmapData.rect),bitmapData.rect.width, bitmapData.rect.height,false);
+						}
+						else if(imageType == ".gif")
+						{
+							//GIF Encode
+							//ba = encodeGIF(tempShape, _backgroundColor, objectBoundingBox, imageScale.scale, matrix, bitmapData, _transparency, quality, realImageSize);
+						}
+						else
+						{
+							//PNG Encod as default
+							ba = (new PNGEncoder()).encodeByteArray(bitmapData.getPixels(bitmapData.rect),bitmapData.rect.width, bitmapData.rect.height,_transparency);
+						}
+						
+						//check setting if save into folder
+						if(imageScale.folder)
+						{
+							//fs.open(new File( saveFileDirectory+"/"+imageScale.folder+"/"+currentLinkageName+buttonState+imageType), FileMode.WRITE);
+							fs.open(new File( saveFileDirectory+"/"+imageScale.folder+"/"+imageName+buttonState+imageType), FileMode.WRITE);
+						}
+						else
+						{
+							//fs.open(new File( saveFileDirectory+"/"+currentLinkageName+buttonState+imageScale.name+imageType), FileMode.WRITE);
+							fs.open(new File( saveFileDirectory+"/"+imageName+buttonState+imageScale.name+imageType), FileMode.WRITE);
+						}
+					}
+					Trace.log("** ba.length:"+ ba.length);
+					fs.writeBytes(ba, 0, ba.length);
+					fs.close();
+					
+					//Clean up local values
+					/*fs = null;
+					objectBoundingBox = null;
+					matrix = null;
+					bitmapData = null;
+					ba = null;
+					tempMovie = null;*/
+				}
+			}
+			
+			
+			private function saveImageFIles(imageType:String, saveFileDirectory:String, currentLinkageName:String, _transparency:Boolean, _backgroundColor:uint, buttonState:String, objectBoundingBox:Rectangle, tempMovie:Sprite, matrix:Matrix, quality:int, imageSize:Object, imageScale:Object, realImageSize:Boolean, imageName:String):void
+			{
+				imageName = AppPlusCache.Instance.validateFileName(imageName);
+				
+				Trace.log("imageName:"+imageName+" "+imageSize.width+" "+imageSize.height+" "+_transparency+" "+_backgroundColor);
+				if( buttonState != "" ||((imageSize.width>0 && imageSize.width < 6000) && (imageSize.height>0 && imageSize.height < 6000) ) )
+				{
+					Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " );
+					//Defind local values
+					var fs:FileStream = new FileStream();
+					var ba:ByteArray;
+					var bitmapData:BitmapData;
+					
+					//Draw Bitmap
+					if(realImageSize  )
+					{
+						//When user definad the size by width and height
+						
+						Trace.log("** realImageSize:"+imageSize.width+" "+imageSize.height+" "+_transparency+" "+ _backgroundColor);
+						bitmapData = new BitmapData(imageSize.width, imageSize.height, _transparency , _backgroundColor);
+						bitmapData.draw(tempMovie ,matrix);
+						
+						if(imageType == ".jpg")
+						{
+							//JPG Encode
+							ba = (new JPEGEncoder(quality)).encodeByteArray(bitmapData.getPixels(bitmapData.rect),bitmapData.rect.width, bitmapData.rect.height,false);
+						}
+						else if(imageType == ".gif")
+						{
+							ba = encodeGIF(tempMovie, _backgroundColor, objectBoundingBox, 1, matrix, bitmapData,_transparency, quality, realImageSize);
+						}
+						else
+						{
+							//PNG Encod as default
+							ba = (new PNGEncoder()).encodeByteArray(bitmapData.getPixels(bitmapData.rect),bitmapData.rect.width, bitmapData.rect.height,_transparency);
+						}
+						
+						//When user save image with definded width and height
+						//fs.open(new File( saveFileDirectory+"/"+currentLinkageName+buttonState+imageScale.name+imageType), FileMode.WRITE);
+						fs.open(new File( saveFileDirectory+"/"+imageName+buttonState+imageSize.name+imageType), FileMode.WRITE);
+					}
+					else
+					{
+						//When user deinded the size by scale
+						
+						Trace.log("** ScaleImageSize:"+objectBoundingBox.width+" "+imageScale.scale+" "+objectBoundingBox.height+" "+imageScale.scale+" "+ _transparency +" "+_backgroundColor);
+						bitmapData = new BitmapData(objectBoundingBox.width*imageScale.scale, objectBoundingBox.height*imageScale.scale, _transparency , _backgroundColor);
+						bitmapData.draw(tempMovie ,matrix);
+						
+						if(imageType == ".jpg")
+						{
+							//JPG Encode
+							ba = (new JPEGEncoder(quality)).encodeByteArray(bitmapData.getPixels(bitmapData.rect),bitmapData.rect.width, bitmapData.rect.height,false);
+						}
+						else if(imageType == ".gif")
+						{
+							ba = encodeGIF(tempMovie, _backgroundColor, objectBoundingBox, imageScale.scale, matrix, bitmapData, _transparency, quality, realImageSize);
+						}
+						else
+						{
+							//PNG Encod as default
+							ba = (new PNGEncoder()).encodeByteArray(bitmapData.getPixels(bitmapData.rect),bitmapData.rect.width, bitmapData.rect.height,_transparency);
+						}
+						
+						//check setting if save into folder
+						if(imageScale.folder)
+						{
+							//fs.open(new File( saveFileDirectory+"/"+imageScale.folder+"/"+currentLinkageName+buttonState+imageType), FileMode.WRITE);
+							fs.open(new File( saveFileDirectory+"/"+imageScale.folder+"/"+imageName+buttonState+imageType), FileMode.WRITE);
+						}
+						else
+						{
+							//fs.open(new File( saveFileDirectory+"/"+currentLinkageName+buttonState+imageScale.name+imageType), FileMode.WRITE);
+							fs.open(new File( saveFileDirectory+"/"+imageName+buttonState+imageScale.name+imageType), FileMode.WRITE);
+						}
+					}
+					Trace.log("** ba.length:"+ ba.length);
+					fs.writeBytes(ba, 0, ba.length);
+					fs.close();
+					
+					//Clean up local values
+					/*fs = null;
+					objectBoundingBox = null;
+					matrix = null;
+					bitmapData = null;
+					ba = null;
+					tempMovie = null;*/
+				}
+			}
+			
+			private function encodeGIF(tempSprite:Sprite, _backgroundColor:uint, objectBoundingBox:Rectangle, imageScale:Number, matrix:Matrix, bitmapData:BitmapData, _transparency:Boolean, quality:Number, realImageSize:Boolean):ByteArray
+			{
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " );
+				var encoder:GIFEncoder = new GIFEncoder();
+				encoder.setQuality(256-quality);
+				var tempMovie:MovieClip;
+				
+				encoder.setFrameRate(1);//10 Frame per second
+				//encoder.setDelay(1000);	//1 second
+				encoder.setDispose(2);  //No Dispose
+				encoder.setRepeat(0);	//Repeating
+				
+				if(_transparency)
+				{
+					encoder.setTransparent(_backgroundColor);
+				}
+				
+				switch(RemoteSingleton.objectSelector.getObjectType(tempSprite))
+				{
+					case RemoteSingleton.objectSelector._MovieClip:
+						//Get Movie Clip Bounding Box 
+						//Create Matrix
+						tempMovie = tempSprite as MovieClip;
+						encoder.start();
+						for (var i:int = 0; i < tempMovie.totalFrames; i++)
+						{
+							tempMovie.gotoAndStop(i);
+							
+							//Draw Bitmap
+							if(realImageSize)
+							{
+								bitmapData = new BitmapData(bitmapData.rect.width*imageScale, bitmapData.rect.height*imageScale, false , _backgroundColor);
+							}
+							else
+							{
+								bitmapData = new BitmapData(objectBoundingBox.width*imageScale, objectBoundingBox.height*imageScale, false , _backgroundColor);
+							}
+							bitmapData.draw(tempMovie,matrix);
+							
+							encoder.addFrame(bitmapData);
+						}
+						encoder.finish();
+						
+						break;
+					case RemoteSingleton.objectSelector._Sprite:
+					case RemoteSingleton.objectSelector._Shape:
+					case RemoteSingleton.objectSelector._SimpleButton:
+						//Get Simple Button Bounding Box
+						encoder.start();
+						encoder.addFrame(bitmapData);
+						encoder.finish();
+						break;
+				}
+				//tempSprite = null;
+				tempMovie=null;
+				return encoder.stream;
+			}
+			
+			
+			// *****************************************			
+			// *Error Handlers *************************			
+			// *****************************************
+			private function errorHandler(event:UncaughtErrorEvent):void 
+			{
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " );
+				if(event.error is Error) 
+				{
+					AppPlusCache.showPopupMessage("Error", "Error", event.error.message, root);
+				}
+				// suppress error dialog
+				event.preventDefault();
+				removeSwfLoaderEvents(event);
+			}
+			
+			private function uncaughtErrorHandler(event:UncaughtErrorEvent):void
+			{
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " );
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - ");
+				if (event.error is Error)
+				{
+					var error:Error = event.error as Error;
+					AppPlusCache.showPopupMessage("Error","Uncaught Error",  error.message, root);
+				}
+				else if (event.error is ErrorEvent)
+				{
+					var errorEvent:ErrorEvent = event.error as ErrorEvent;
+					AppPlusCache.showPopupMessage("Error","Uncaught Error",  errorEvent.text, root);
+				}
+				else
+				{
+					AppPlusCache.showPopupMessage("Error", "A non-Error", "non-ErrorEvent type was thrown and uncaught:"+event.type, root);
+				}
+				event.preventDefault();
+				removeSwfLoaderEvents(event);
+			}
+			
+			protected function INVALIDErrorHandler(event:Event):void
+			{
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " );
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - ");
+				AppPlusCache.showPopupMessage("Error","Invalide Error", "Uninitialized Error "+event.type, root);
+				removeSwfLoaderEvents(event);
+			}
+			
+			
+			private function removeSwfLoaderEvents(event:Event):void
+			{
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " );
+				//event.currentTarget.loaderInfo.uncaughtErrorEvents.removeEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR, uncaughtErrorHandler);
+				event.currentTarget.removeEventListener(FlexEvent.UPDATE_COMPLETE, updateCompleteHandler);
+				event.currentTarget.removeEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR,errorHandler);
+				event.currentTarget.removeEventListener(FlexEvent.INVALID, INVALIDErrorHandler);
+				event.currentTarget.removeEventListener(Event.COMPLETE, completeLoadedMovie);
+			}
+			
+			private function removeSwfLoaderFlexEvents(event:FlexEvent):void
+			{
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " );
+				//event.currentTarget.loaderInfo.uncaughtErrorEvents.removeEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR, uncaughtErrorHandler);
+				event.currentTarget.removeEventListener(FlexEvent.UPDATE_COMPLETE, updateCompleteHandler);
+				event.currentTarget.removeEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR,errorHandler);
+				event.currentTarget.removeEventListener(FlexEvent.INVALID, INVALIDErrorHandler);
+				event.currentTarget.removeEventListener(Event.COMPLETE, completeLoadedMovie);
+			}
+			
+			// *****************************************		
+			// *****************************************
+			
+			
+		]]>
+	</fx:Script>
+</s:VGroup>
