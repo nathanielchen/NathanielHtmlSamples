@@ -38,55 +38,55 @@
 			public function convertFlash2Image(source:Object, imageSizeArray:Array, realImageSize:Boolean, buttonState:String = ""):void
 			{
 				//Delete all pre added elements
-				if(this.numChildren>0){
+				if(this.numChildren>0)
+				{
 					removeAllElements();
 				}
 				
-				if(!imageSizeArray){
+				if(!imageSizeArray)
+				{
 					AppPlusCache.showPopupMessage("Error", "A non-Error", "Image size has not been definded.", root);
 				}
 					
 				//AppPlusCache.Instance.currentWorkingObject.content
 				//("user "+AppPlusCache.Instance.currentWorkingObject.content);
 				
-				for(var s:int = 0; s<imageSizeArray.length; s++){
-					//parent function pass the source - when source is not Null
-					if(source){
-						if(realImageSize){	
-							//Movie Real size
-							setRealDimension_SwfSource(source, imageSizeArray[s], AppPlusCache.Instance.currentDisplayObjectCurrentFrame, imageSizeArray[s].name, buttonState);
-						}else{
-							//Movie Scale size
-							setScaleDimension_SwfSource(source, imageSizeArray[s], AppPlusCache.Instance.currentDisplayObjectCurrentFrame, imageSizeArray[s].name);
-						}
-					}else{
-						//pre create new swfloaders for new png images
+				for(var s:int = 0; s<imageSizeArray.length; s++)
+				{
+					//Trace.log(AppPlusCache.Instance.currentSelectedObjects.length);
+					for each(var selection:Object in AppPlusCache.Instance.currentSelectedObjects)
+					{
 						//Loop all selected object
-						for each(var selection:Object in AppPlusCache.Instance.currentSelectedObjects)
+						source = selection.libraryClass;
+						//pre create new swfloaders for new png images
+						if(selection.libraryType==RemoteSingleton.objectSelector._SimpleButton)
 						{
-							source = selection.libraryClass;
 							//When the display object is Button
-							if(selection.libraryType == RemoteSingleton.objectSelector._SimpleButton){
-								if(realImageSize){
-									//Button Real size
-									setButtonRealDimension_SwfSource(source, imageSizeArray, selection.libraryName);
-								}else{
-									//Button Scale size
-									setButtonScaleDimension_SwfSource(source, imageSizeArray, selection.libraryName);
-								}
-							}else{
-								
-								if(realImageSize){	
-									//Movie Real size
-									setRealDimension_SwfSource(source, imageSizeArray[s], AppPlusCache.Instance.currentDisplayObjectCurrentFrame, selection.libraryName, buttonState);
-								}else{
-									//Movie Scale size
-									setScaleDimension_SwfSource(source, imageSizeArray[s], AppPlusCache.Instance.currentDisplayObjectCurrentFrame, selection.libraryName);
-								}
+							if(realImageSize)
+							{
+								//Button Real size
+								setButtonRealDimension_SwfSource(source, imageSizeArray, selection.libraryName);
+							}
+							else
+							{
+								//Button Scale size
+								setButtonScaleDimension_SwfSource(source, imageSizeArray, selection.libraryName);
+							}
+						}
+						else
+						{
+							if(realImageSize)
+							{	
+								//Movie Real size
+								setRealDimension_SwfSource(source, imageSizeArray, AppPlusCache.Instance.currentDisplayObjectCurrentFrame, selection.libraryName, buttonState);
+							}
+							else
+							{
+								//Movie Scale size
+								setScaleDimension_SwfSource(source, imageSizeArray, AppPlusCache.Instance.currentDisplayObjectCurrentFrame, selection.libraryName);
 							}
 						}
 					}
-					
 				}
 			}
 			
@@ -136,7 +136,6 @@
 								default:
 									//Icon
 									//When user selected button and export with icon panel (Not button state definded on the passing)
-									trace("@"+selection.libraryName+imageSizeArray[s].name);
 									tempSwfClass = this.getChildByName(selection.libraryName+imageSizeArray[s].name) as SWFLoader;//"swfClass"
 									tempStateSprite = tempSwfClass as Sprite;
 									break;
@@ -237,7 +236,6 @@
 				objectBoundingBox = null;
 				tempSwfClass = null;
 			}
-			
 			private function createMovieClip2ImageFiles(selection:Object, imageType:String, imageScaleArray:Array, imageSizeArray:Array, saveFileDirectory:String, currentLinkageName:String, transparency:Boolean, backgroundColor:uint, quality:int, buttonState:String, realImageSize:Boolean, scaleToFitType:String, exportSequence:Boolean):void
 			{
 				
@@ -267,32 +265,25 @@
 					for(var n:int = 0; n<imageScaleArray.length; n++)
 					{	
 						//Get tempSwfClass -swfloader
-						if(buttonState=="Icon"){
-							//export Icon image files
+						if(buttonState=="Icon")
+						{
+							//if Icon 
 							//Library item Button item
 							//this.getChildAt(0)
-							/*if(selection is SWFLoader)
+							tempSwfClass = this.getChildByName(imageSizeArray[s].name)as SWFLoader;//"swfClass"
+						}
+						else if(selection is SWFLoader)
+						{
+							//SWF file to Image
+							tempSwfClass = selection as SWFLoader;
+						}
+						else
+						{
+							//Library item movieclip item
+							tempSwfClass = this.getChildByName(selection.libraryName) as SWFLoader;//"swfClass"
+							if(!tempSwfClass)
 							{
-								//SWF file to Image
-								tempSwfClass = selection as SWFLoader;
-							}else
-							{*/
-								//Library item / movieclip item
 								tempSwfClass = this.getChildByName(imageSizeArray[s].name)as SWFLoader;//"swfClass"
-							//}
-						}else{
-							//export imge files but not for icon.
-							if(selection is SWFLoader)
-							{
-								//SWF file to Image
-								tempSwfClass = selection as SWFLoader;
-							}else{
-								//Library item / movieclip item
-								tempSwfClass = this.getChildByName(selection.libraryName) as SWFLoader;//"swfClass"
-								if(!tempSwfClass)
-								{
-									tempSwfClass = this.getChildByName(imageSizeArray[s].name)as SWFLoader;//"swfClass"
-								}
 							}
 						}
 						
@@ -427,7 +418,7 @@
 			}
 			
 			//Create Image
-			public function createImageFiles(imageType:String, imageScaleArray:Array, imageSizeArray:Array, saveFileDirectory:String, currentLinkageName:String, transparency:Boolean, backgroundColor:uint, quality:int, buttonState:String, realImageSize:Boolean, scaleToFitType:String, exportSequence:Boolean, selectedObjects:Vector.<Object> = null, selectedSwfLoader:SWFLoader=null):void
+			public function createImageFiles(imageType:String, imageScaleArray:Array, imageSizeArray:Array, saveFileDirectory:String, currentLinkageName:String, transparency:Boolean, backgroundColor:uint, quality:int, buttonState:String, realImageSize:Boolean, scaleToFitType:String, exportSequence:Boolean, selectedObjects:Vector.<Object> = null):void
 			{	
 				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " + " source:" +currentLinkageName);
 				if(selectedObjects)
@@ -455,9 +446,8 @@
 							createMovieClip2ImageFiles(selection, imageType,imageScaleArray, imageSizeArray, saveFileDirectory, currentLinkageName, transparency, backgroundColor, quality, buttonState, realImageSize, scaleToFitType, exportSequence);
 						}
 					}
-				}else if(selectedSwfLoader){
-					createMovieClip2ImageFiles(selectedSwfLoader, imageType, imageScaleArray, imageSizeArray, saveFileDirectory, currentLinkageName, transparency, backgroundColor, quality, buttonState, realImageSize, scaleToFitType, exportSequence);
-				}else{
+				}else
+				{
 					//if swf file is no empty
 					if(AppPlusCache.Instance.currentWorkingObject)
 					{
@@ -478,24 +468,15 @@
 				//tempMovie = null;
 			}
 			
-			
-			protected function completeLoadedMovie(event:Event):void{
-				stopThisMovieClip(event.target.content as MovieClip);
-				if(event.target.content != null){
-					removeSwfLoaderEvents(event);
-				}
-			}
-			protected function updateCompleteHandler(event:FlexEvent):void{
-				stopThisMovieClip(event.target.content as MovieClip);
-				if(event.target.content != null){
-					removeSwfLoaderFlexEvents(event);
-				}
-			}
-			
-			private function stopThisMovieClip(tempMovie:MovieClip):void{
-				if(tempMovie != null){
+			private function completeLoadedMovie(event:Event):void
+			{
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - ");
+				var tempMovie:MovieClip = event.target.content as MovieClip;
+				if(tempMovie != null)
+				{
 					tempMovie.gotoAndStop(currentFrame);
 				}
+				removeSwfLoaderEvents(event);
 			}
 			
 			//Button Scale Size
@@ -591,37 +572,36 @@
 			}
 			
 			//Movie Real Size
-			private function setRealDimension_SwfSource(source:Object, imageSizeArrayItem:Object, _currentFrame:int, libraryName:String, buttonState:String ):void
+			private function setRealDimension_SwfSource(source:Object, imageSizeArray:Array, _currentFrame:int, libraryName:String, buttonState:String ):void
 			{
 				currentFrame = _currentFrame;
 				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " +currentFrame);
 				
 				//Loop all size of image here
-				//for(var i:int = 0; i<imageSizeArray.length; i++)
-				//{
+				for(var i:int = 0; i<imageSizeArray.length; i++)
+				{
 					var swfloader:SWFLoader = new SWFLoader();
 					//swfloader.loaderInfo.uncaughtErrorEvents.addEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR, uncaughtErrorHandler);
 					swfloader.addEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR,errorHandler);
 					swfloader.addEventListener(FlexEvent.INVALID, INVALIDErrorHandler);
 					swfloader.addEventListener(Event.COMPLETE, completeLoadedMovie);
-					swfloader.addEventListener(FlexEvent.UPDATE_COMPLETE, updateCompleteHandler);
+					swfloader.addEventListener(FlexEvent.UPDATE_COMPLETE, completeLoadedMovie);
 					
-					trace("$"+libraryName);
-					//if(buttonState=="Icon")
-					//{
-					//	swfloader.name=imageSizeArray[i].name;//"swfClass"
-					//}
-					//else
-					//{
+					if(buttonState=="Icon")
+					{
+						swfloader.name=imageSizeArray[i].name;//"swfClass"
+					}
+					else
+					{
 						swfloader.name=libraryName;//"swfClass"
-					//}
+					}
 					swfloader.source = source;
 					
-					swfloader.width = imageSizeArrayItem.width;
-					swfloader.height = imageSizeArrayItem.height;
+					swfloader.width = imageSizeArray[i].width;
+					swfloader.height = imageSizeArray[i].height;
 					
 					addElement(swfloader);
-				//}
+				}
 			}
 			
 			
@@ -939,7 +919,7 @@
 			//private var swfloader:SWFLoader;
 			//private var simpleButton:SimpleButton
 			//Movie Scale Size
-			private function setScaleDimension_SwfSource(source:Object, imageSizeArray:Object, _currentFrame:int, libraryName:String):void
+			private function setScaleDimension_SwfSource(source:Object, imageSizeArray:Array, _currentFrame:int, libraryName:String):void
 			{
 				currentFrame = _currentFrame;
 				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " +currentFrame +" source:" + source);
@@ -950,7 +930,7 @@
 				swfloader.addEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR,errorHandler);
 				swfloader.addEventListener(FlexEvent.INVALID, INVALIDErrorHandler);
 				swfloader.addEventListener(Event.COMPLETE, completeLoadedMovie);	
-				swfloader.addEventListener(FlexEvent.UPDATE_COMPLETE, updateCompleteHandler);
+				swfloader.addEventListener(FlexEvent.UPDATE_COMPLETE, completeLoadedMovie);
 				
 				swfloader.name= libraryName; // "swfClass";
 				swfloader.source = source;
@@ -966,6 +946,7 @@
 			
 			private function stopMovieClip(mc:MovieClip):void
 			{
+				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " );
 				mc.stop();
 				for (var i:int = 0; i < mc.numChildren; i++)
 				{
@@ -2460,22 +2441,11 @@
 			{
 				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " );
 				//event.currentTarget.loaderInfo.uncaughtErrorEvents.removeEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR, uncaughtErrorHandler);
-				event.currentTarget.removeEventListener(FlexEvent.UPDATE_COMPLETE, updateCompleteHandler);
+				event.currentTarget.removeEventListener(FlexEvent.UPDATE_COMPLETE, completeLoadedMovie);
 				event.currentTarget.removeEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR,errorHandler);
 				event.currentTarget.removeEventListener(FlexEvent.INVALID, INVALIDErrorHandler);
 				event.currentTarget.removeEventListener(Event.COMPLETE, completeLoadedMovie);
 			}
-			
-			private function removeSwfLoaderFlexEvents(event:FlexEvent):void
-			{
-				Trace.log(new Error().getStackTrace().split("\n")[1].split("[")[0]+" - " );
-				//event.currentTarget.loaderInfo.uncaughtErrorEvents.removeEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR, uncaughtErrorHandler);
-				event.currentTarget.removeEventListener(FlexEvent.UPDATE_COMPLETE, updateCompleteHandler);
-				event.currentTarget.removeEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR,errorHandler);
-				event.currentTarget.removeEventListener(FlexEvent.INVALID, INVALIDErrorHandler);
-				event.currentTarget.removeEventListener(Event.COMPLETE, completeLoadedMovie);
-			}
-			
 			// *****************************************		
 			// *****************************************
 			

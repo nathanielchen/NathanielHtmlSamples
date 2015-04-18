@@ -29,7 +29,6 @@ package com
 		private var mainGraphicsSolidFill:GraphicsSolidFill;
 		private var mainGraphicsGradientFill:GraphicsGradientFill;
 		private var mainGraphicsStroke:GraphicsStroke;
-		private var mainGraphicsStrokeFill:GraphicsSolidFill;
 		private var graphicsDataPatten:String;
 		
 		public function ValidateHTMLContener(graphicsData:Vector.<IGraphicsData>):Boolean
@@ -84,30 +83,6 @@ package com
 			
 			switch(graphicsDataPatten)
 			{
-				case "320320":
-					if(graphicsData[0] is GraphicsSolidFill)
-					{
-						//Identifying Solid Fill
-						mainGraphicsSolidFill = graphicsData[0] as GraphicsSolidFill;
-					}
-					//Identifying Path
-					if(graphicsData[1] is GraphicsPath)
-					{
-						mainGraphicsPath = graphicsData[1] as GraphicsPath;
-					}
-					//Identifying Path
-					if(graphicsData[3] is GraphicsSolidFill)
-					{
-						mainGraphicsStrokeFill = graphicsData[3] as GraphicsSolidFill;
-					}
-					
-					//Identifying stroke Path
-					if(graphicsData[4] is GraphicsPath)
-					{
-						mainGraphicsStrokePath = graphicsData[4] as GraphicsPath;
-					}
-					
-					break;
 				case "3201210":
 				case "4201210":
 				case "320":
@@ -156,6 +131,7 @@ package com
 							mainGraphicsStrokePath = graphicsData[1] as GraphicsPath;
 						}
 					}
+					
 					break;
 				case "1210320":
 				case "1210420":
@@ -192,7 +168,7 @@ package com
 					break;
 			}
 			
-			//trace("case \""+mainGraphicsPath.commands.join("") +"\":");
+			trace("case \""+mainGraphicsPath.commands.join("") +"\":");
 			switch(mainGraphicsPath.commands.join(""))
 			{
 				case "1332332332332":
@@ -634,13 +610,18 @@ package com
 		
 		public function GetStrokeType(path:GraphicsPath):String
 		{
-			if(path.commands.join("").substr(0,6) == "121212"){
-				return "dashed";
+			if(path.commands.join("") == "12")
+			{
+				return "solid";
 			}
-			if(path.commands.join("").substr(0,14) == "133333333"){
-				return "dotted";
+			
+			switch(path.commands.join("").substr(0,14))
+			{
+				case "12121212121212":
+					return "dashed";
+					break;
 			}
-			return "solid";
+			return "dotted";
 		}
 		
 		public function GetStroke(stroke:GraphicsStroke, graphicPath:GraphicsPath, cssAttributes:CssAttributes):CssAttributes
@@ -659,27 +640,19 @@ package com
 					//Identifying Gradient Fill
 					borderCSS = GetGradientFill(stroke.fill as GraphicsGradientFill);
 				}
-				cssAttributes.border	=	stroke.thickness+"px "+GetStrokeType(mainGraphicsStrokePath)+" "+ borderCSS;
-			}else
-			{
-				if(mainGraphicsStrokeFill)
-				{	//Identifying Solid Fill 
-					borderCSS = GetSolidFill(mainGraphicsStrokeFill as GraphicsSolidFill);
-				}
-				cssAttributes.border	=	"1px "+GetStrokeType(mainGraphicsStrokePath)+" "+ borderCSS;
+				cssAttributes.border	=	stroke.thickness+"px "+GetStrokeType(graphicPath)+" "+ borderCSS;
 			}
-			
 			return cssAttributes;
 		}
 		
-		public function HTMLContenerBackground(graphicsData:Vector.<IGraphicsData>, contentHolderWidth:Number, justBackgroundValues:Boolean, cssAttributes:CssAttributes, parentContener:String):CssAttributes
+		public function HTMLContenerBackground(graphicsData:Vector.<IGraphicsData>, contentHolderWidth:Number, justBackgroundValues:Boolean, cssAttributes:CssAttributes):CssAttributes
 		{	
 			//var cssAttributes:CssAttributes;
 			if( ValidateHTMLContener(graphicsData))
 			{
 				//cssAttributes = new CssAttributes();
 				//Create background CSS
-				if( parentContener == "html body") //!justBackgroundValues &&
+				if(!justBackgroundValues)
 				{	//Not create background bounding box for Background color Values only
 					cssAttributes=GetContenerBoundingBox(mainGraphicsPath,contentHolderWidth, cssAttributes);
 				}

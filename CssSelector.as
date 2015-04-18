@@ -235,7 +235,6 @@ package com
 			}
 			//Layout value
 			var layout:String = LayoutFixed;
-			var cssDeclaration:String;
 			//********************************
 			switch(layout)
 			{
@@ -246,7 +245,7 @@ package com
 				case LayoutScale:
 					break;
 				case LayoutFixed:
-					cssDeclaration = "";	
+					var cssDeclaration:String="";	
 					
 					//Positioning
 					//cssDeclaration += tabs +"//Positioning";
